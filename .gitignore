@@ -1,0 +1,24 @@
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Uu]ser[Ss]ettings/
+*.csproj
+*.sln
+*.user
+.vs/
+
+# 本地构建产物 / 安装包（只进 Release，不进仓库）
+*.apk
+*.aab
+
+# 架构上不提交场景：BuildScript 构建时自动生成空场景
+/Assets/Scenes/
+
+# 美术/字体子集化的临时源文件
+artgen/fontwork/*.ttc
+artgen/fontwork/*.otf
+.DS_Store
+
