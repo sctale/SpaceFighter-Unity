@@ -28,7 +28,7 @@ namespace AuroraRift
         /// <summary>原版「5 关一档弹幕强度」：tier = min(3, floor((s-1)/5))。</summary>
         public int DensityTier => Mathf.Min(3, (Zone - 1) / 5);
 
-        float _supplyTimer, _clearTimer, _railProgress;
+        float _supplyTimer, _clearTimer, _railProgress, _bossWarn;
         int _pityWeapon, _pityDrone;
 
         // ------------------------------------------------------------ 星区剧本
@@ -67,6 +67,7 @@ namespace AuroraRift
         };
 
         public string ZoneName => ZoneNames[(Zone - 1) % ZoneNames.Length];
+        public string BossName => BossMoves.NameZh(BossMoves.BossForZone(Zone));
         /// <summary>
         /// 原版一个星区就是一段剧本（没有"三波"），所以这里报剧本进度而不是波次。
         /// </summary>
@@ -301,7 +302,18 @@ namespace AuroraRift
                 // 清场：全灭且至少 1 秒才出 Boss，最多等 9.5 秒（防止有飞机卡住不放行）
                 TickPending(dt);
                 _clearTimer += dt;
-                if ((_enemies.Count == 0 && _clearTimer > 1.0f) || _clearTimer > 9.5f) SpawnBoss();
+                // 原版 startBossWarning：先亮 2.4 秒 WARNING，巨构才入场
+                if (_bossWarn > 0f)
+                {
+                    _bossWarn -= dt;
+                    if (_bossWarn <= 0f) SpawnBoss();
+                }
+                else if ((_enemies.Count == 0 && _clearTimer > 1.0f) || _clearTimer > 9.5f)
+                {
+                    _bossWarn = 2.4f;
+                    GameRoot.Instance?.Announce("WARNING", "巨构信号接近 // MASSIVE SIGNAL", 2.6f, true);
+                    AudioDirector.Instance?.PlayWarn();
+                }
             }
             else
             {

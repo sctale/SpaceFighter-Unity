@@ -19,6 +19,9 @@ namespace AuroraRift
         public float BreakMax => _breakMax;
         public float BulletSpeed => _bulletSpeed;
         public int Phase { get; private set; }
+        public string BossLabel => BossMoves.NameZh(_bossIndex);
+        public string BossTitle => BossMoves.TitleZh(_bossIndex) + " // " + BossMoves.EnName(_bossIndex);
+        public string BossEn => BossMoves.EnName(_bossIndex);
         /// <summary>判定半径：与 4.08 世界单位的机体视觉半径（≈1.88）对齐，取略小值。</summary>
         public float HitRadius => 1.55f;
 
@@ -31,6 +34,7 @@ namespace AuroraRift
         float _flashT, _ringSpeed = 22f;
         Color _accent = new Color(1f, 0.45f, 0.35f);
         bool _dead;
+        bool _overloadShown;
         Difficulty _diff;
         float _spawnTime;
         int _hitsAtSpawn;
@@ -111,7 +115,7 @@ namespace AuroraRift
             flashGo.transform.localScale = Vector3.one * 1.035f;
 
             _timer = 2.2f;
-            GameRoot.Instance?.ShowBanner("! 星区核心接近");
+            GameRoot.Instance?.Announce(BossLabel, BossTitle, 2.4f, true);
 
             _spawnTime = Time.time;
             _hitsAtSpawn = GameRoot.Instance != null ? GameRoot.Instance.Stats.Hits : 0;
@@ -141,6 +145,11 @@ namespace AuroraRift
             }
 
             float frac = Hp / Mathf.Max(1f, MaxHp);
+            if (!_overloadShown && Hp <= MaxHp * GameConfig.BossCriticalFrac)
+            {
+                _overloadShown = true;
+                GameRoot.Instance?.Announce("OVERLOAD", "核心临界 · 招式不再停顿", 1.6f, true);
+            }
             int wantPhase = frac > GameConfig.BossPhaseHigh ? 0
                           : frac > GameConfig.BossPhaseLow ? 1 : 2;
             if (wantPhase != _phase)
@@ -152,7 +161,7 @@ namespace AuroraRift
                 _pending.Clear();
                 BossLaser.ClearAll();
                 TriggerShockwave();
-                GameRoot.Instance?.ShowBanner($"核心进入第 {_phase + 1} 阶段");
+                GameRoot.Instance?.Announce("PHASE " + (_phase + 1), "核心过载 · 弹幕强化", 1.4f, true);
                 // mercy：换阶段后给一段明确的喘息窗口
                 _mercy = GameConfig.BossMercyWindow;
                 _timer = GameConfig.BossMercyWindow;
@@ -477,7 +486,7 @@ namespace AuroraRift
                 _stun = GameConfig.BossBreakStun;
                 GameRoot.Instance?.ClearEnemyBullets(false);
                 GameRoot.Instance?.RegisterBreak();
-                GameRoot.Instance?.ShowBanner("核心破防 · 伤害窗口");
+                GameRoot.Instance?.Announce("CORE BREAK", "核心破防 · 伤害窗口", 1.2f);
             }
             if (Hp <= 0f) Die();
         }
@@ -509,7 +518,7 @@ namespace AuroraRift
                 float baseScore = GameConfig.ClearBaseScore + sector * GameConfig.ClearBasePerSector;
                 int total = Mathf.RoundToInt((baseScore + timeBonus + noHitBonus + grazeBonus) * mul);
                 root.AddScore(total);
-                root.ShowBanner("核心击破 +" + total);
+                root.Announce("CORE BREACH", "巨构核心崩解 · +" + total, 1.8f);
                 root.ShowClear(new[]
                 {
                     $"基础分      {Mathf.RoundToInt(baseScore * mul)}",

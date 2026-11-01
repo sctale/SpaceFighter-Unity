@@ -44,8 +44,13 @@ namespace AuroraRift
         public bool HighContrast { get; private set; }
         public bool Muted { get; private set; }
 
-        public string Banner { get; private set; }
-        public float BannerAt { get; private set; } = -99f;
+        /// <summary>公告（原版 ui.announce）：标题 + 副标题 + 时长 + 是否警示色 + 是否贴底。</summary>
+        public string AnnounceTitle { get; private set; }
+        public string AnnounceSub { get; private set; }
+        public bool AnnounceAlert { get; private set; }
+        public bool AnnounceBottom { get; private set; }
+        public float AnnounceAt { get; private set; } = -99f;
+        public float AnnounceDur { get; private set; } = 2f;
         public string Toast { get; private set; }
         public float ToastAt { get; private set; } = -99f;
         public string Hint { get; private set; }
@@ -71,7 +76,18 @@ namespace AuroraRift
             (63f,   "青色弧段 装甲 · 金色箭头 急速 · 玫红虚线 爆裂", "青色弧段 装甲 · 金色箭头 急速 · 玫红虚线 爆裂"),
         };
 
-        public void ShowBanner(string text) { Banner = text; BannerAt = Time.unscaledTime; }
+        /// <summary>原版 ui.js:469 announce(title, sub, {alert, duration, bottom})。</summary>
+        public void Announce(string title, string sub = null, float dur = 2f, bool alert = false, bool bottom = false)
+        {
+            AnnounceTitle = title;
+            AnnounceSub = sub;
+            AnnounceDur = dur;
+            AnnounceAlert = alert;
+            AnnounceBottom = bottom;
+            AnnounceAt = Time.unscaledTime;
+        }
+
+        public void ShowBanner(string text) => Announce(text, null, 1.6f);
         public void ShowToast(string text) { Toast = text; ToastAt = Time.unscaledTime; }
         void ShowHint(string text) { Hint = text; HintAt = Time.unscaledTime; }
 
@@ -141,7 +157,12 @@ namespace AuroraRift
             State = GameState.Playing;
             Time.timeScale = 1f;
             _hintIndex = 0;
-            ShowToast("敌机信号接近");
+            var dir = Director.Instance;
+            if (dir != null)
+                Announce("SECTOR " + dir.Zone.ToString("00"),
+                    dir.ZoneName + " // 巨构 " + dir.BossName + " 接近", 2.2f, false, true);
+            else
+                ShowToast("敌机信号接近");
         }
 
         public void AddScore(float v) => Score += v;
@@ -207,6 +228,13 @@ namespace AuroraRift
                 PlayerPrefs.SetInt("aurora.best", Best);
                 PlayerPrefs.Save();
             }
+        }
+
+        /// <summary>返回基地（开始菜单），不回退到上一局。</summary>
+        public void BackToMenu()
+        {
+            Time.timeScale = 1f;
+            GameBootstrap.Rebuild(false);
         }
 
         public void Restart()

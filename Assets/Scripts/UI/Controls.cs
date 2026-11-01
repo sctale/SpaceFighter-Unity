@@ -35,18 +35,19 @@ namespace AuroraRift
         /// <summary>
         /// 布局放在参考空间里（和 Hud 同一坐标系），命中判定再把触点换算过来，
         /// 这样「画出来的环」和「点得到的环」永远是同一块矩形。
+        /// 对齐网页版：底部左端是生存状态 + 武器胶囊，中间是进度轨，右端三枚 40px 动作环。
         /// </summary>
         public static void Layout()
         {
             float w = RefW;
-            float r = 40f;                       // 网页版 40px 直径 → 80 参考单位
+            const float ring = 80f;                    // 网页版 40px 直径 → 80 参考单位
             float cy = BandTop + 62f;
 
-            NovaRect = C(w - 60f, cy, r * 2f, r * 2f);
-            DashRect = C(w - 60f - 92f, cy, r * 2f, r * 2f);
-            PrecisionRect = C(w - 60f - 184f, cy, r * 2f, r * 2f);
-            WeaponRect = C(w * 0.5f - 190f, BandTop + 62f, 200f, 56f);
-            PauseRect = C(w - 60f, SafeTopRef + 60f, 84f, 84f);
+            NovaRect = C(w - 80f, cy, ring, ring);
+            DashRect = C(NovaRect.center.x - 98f, cy, ring, ring);
+            PrecisionRect = C(DashRect.center.x - 98f, cy, ring, ring);
+            WeaponRect = new Rect(40f + 124f + 22f, cy - 34f, 210f, 68f);
+            PauseRect = C(w - 40f - 42f, SafeTopRef + 22f + 42f, 84f, 84f);
             _built = true;
         }
 

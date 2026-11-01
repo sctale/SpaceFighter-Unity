@@ -198,6 +198,10 @@ namespace AuroraRift.EditorTools
             Check("enemy.kinds", EnemyDefs.All.Length, 12);
             Check("enemy.hpPerSector", GameConfig.EnemyHpPerSector, 0.16f);
             Check("enemy.speedPerTier", GameConfig.EnemySpeedPerTier, 0.14f);
+            // 原版 entities.js:1392/1275：弹速 min(300,150×(1+tier×0.14))、移速 ×(1+tier×0.14)
+            Check("enemy.bulletSpeed@t0", Mathf.Min(300f, 150f * (1f + 0f * 0.14f)), 150f);
+            Check("enemy.bulletSpeed@t3", Mathf.Min(300f, 150f * (1f + 3f * 0.14f)), 213f);
+            Check("enemy.speedMul@t3", 1f + 3f * 0.14f, 1.42f, 1e-4f);
             Check("enemy.fireFloor", GameConfig.EnemyFireIntervalFloor, 0.7f);
             Check("enemy.capAlive", GameConfig.MaxEnemiesAlive, 42);
             Check("enemy.capBullets", GameConfig.MaxEnemyBullets, 420);

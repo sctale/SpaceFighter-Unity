@@ -102,6 +102,15 @@ namespace AuroraRift
         /// <summary>原版按 (sector-1)%3 轮换三台 Boss，而不是按星区段固定。</summary>
         public static int BossForZone(int zone) => ((zone - 1) % 3 + 3) % 3;
 
+        /// <summary>网页版 BOSS_TYPES 的名字：阿刻戎 / 薇尔 / 赫利俄斯。</summary>
+        public static readonly string[] BossNameZh = { "阿刻戎", "薇尔", "赫利俄斯" };
+        public static readonly string[] BossTitleZh = { "守门人", "织星者", "新星核心" };
+        public static readonly string[] BossEn = { "GATEKEEPER", "STAR WEAVER", "NOVA CORE" };
+
+        public static string NameZh(int bossIndex) => BossNameZh[Mathf.Clamp(bossIndex, 0, 2)];
+        public static string TitleZh(int bossIndex) => BossTitleZh[Mathf.Clamp(bossIndex, 0, 2)];
+        public static string EnName(int bossIndex) => BossEn[Mathf.Clamp(bossIndex, 0, 2)];
+
         /// <summary>弹幕强度档（每 5 个星区一档，最多 3 档）。</summary>
         public static int TierForZone(int zone) => Mathf.Min(3, (zone - 1) / 5);
     }

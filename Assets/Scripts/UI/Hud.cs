@@ -3,10 +3,17 @@ using UnityEngine;
 namespace AuroraRift
 {
     /// <summary>
-    /// HUD 用 IMGUI 绘制：不依赖 uGUI 的 UI/Default 着色器（构建时会被剥离，界面会变品红）。
-    /// v0.16.0 起按网页版补齐四层界面：开始菜单 / 战斗仪表带 / 暂停设置 / 结算页，
-    /// 并且手机上全部可点（网页版是 DOM 按钮，这里用同一套 Controls 矩形保证画得出=点得到）。
-    /// 参考分辨率 1080×1920，按屏幕高度等比缩放。
+    /// 界面层：照着网页版 web/www（index.html + css/game.css + ui.js）重做的四层界面。
+    /// 参考分辨率 1080×1920，按屏幕高度等比缩放；所有字号、间距、色值来自网页版设计令牌。
+    ///
+    /// 结构：
+    ///   开始菜单  —— 品牌标记 / 大标题 / 特性胶囊 / 战绩卡 / 三档难度 / 开始按钮 / 6 条操作提示
+    ///   战斗 HUD  —— 顶栏（分数·最佳·擦弹 / 星区 / 暂停）、连锁盒、Boss 卡、底部仪表带、公告、提示、吐司
+    ///   暂停页    —— 装配摘要 + 4 行设置 + 继续/重开/返回基地
+    ///   结算页    —— 分数卡 + 评级圆章 + 10 项数据 + 装配摘要 + 再次出击/返回基地
+    ///
+    /// 注意：IMGUI 的 GUI.skin 在裁剪包里可能为空，所以样式全部自建（不继承内置样式）。
+    /// 触屏控件的热区在 Controls 里，这里只负责画——不要再挂 GUI.Button，否则一次触摸会触发两次。
     /// </summary>
     public class Hud : MonoBehaviour
     {
@@ -14,92 +21,41 @@ namespace AuroraRift
 
         const float RefH = 1920f;
 
-        GUIStyle _body, _small, _center, _boss, _clear, _big, _btn, _btnPrimary, _empty;
-        Texture2D _pad, _ringTex, _clearTex;
-        Font _font;
+        // ---------------------------------------------------------------- 设计令牌
+        static Color Ink0 => GameConfig.Hex("04060F");
+        static Color Paper => GameConfig.Hex("F3F8FF");
+        static Color InkText => GameConfig.Hex("E8EEFF");
+        static Color Muted => GameConfig.Hex("8D9BBD");
+        static Color Dimc => GameConfig.Hex("5E6B8C");
+        static Color Teal => GameConfig.Hex("69F5DC");
+        static Color TealDim => GameConfig.Hex("36C7B4");
+        static Color Violet => GameConfig.Hex("9B8CFF");
+        static Color Rose => GameConfig.Hex("FF6F91");
+        static Color Gold => GameConfig.Hex("FFD27A");
+        static Color Line(float a) => new Color(0.63f, 0.71f, 1f, a);
+
+        Font _font, _bold;
+        GUIStyle _eyebrow, _tiny, _small, _body, _num, _numBig, _title, _h1, _h1c, _h2, _center,
+                 _right, _btn, _btnBig, _tag, _kbd, _wrap;
+
+        GameState _lastState = GameState.Menu;
+        float _stateAt;
+
+        // ---------------------------------------------------------------- 生命周期
 
         void Awake()
         {
             Instance = this;
+            UiKit.Init();
 
             // 安卓上 CreateDynamicFontFromOSFont 只有 Roboto，中文会整段不显示：
-            // 随包带 Noto Sans CJK SC 的子集字体（仅 UI 用到的 942 个字形）。
+            // 随包带 Noto Sans CJK SC 子集字体（拉丁字母 + UI 用到的全部汉字）。
             _font = Resources.Load<Font>("Fonts/AuroraCJK");
             if (_font == null)
                 _font = Font.CreateDynamicFontFromOSFont(
                     new[] { "Microsoft YaHei", "SimHei", "Noto Sans CJK SC", "Droid Sans Fallback", "sans-serif" }, 28);
-
-            const int px = 96;
-            _pad = new Texture2D(px, px, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-            _ringTex = new Texture2D(px, px, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
-            var cols = new Color32[px * px];
-            var ringCols = new Color32[px * px];
-            for (int y = 0; y < px; y++)
-            {
-                for (int x = 0; x < px; x++)
-                {
-                    float d = Vector2.Distance(new Vector2(x, y), new Vector2(px / 2f, px / 2f)) / (px / 2f);
-                    float ring = Mathf.Clamp01(1f - Mathf.Abs(d - 0.86f) * 9f);
-                    float fill = Mathf.Clamp01(1f - d) * 0.35f;
-                    cols[y * px + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(Mathf.Max(ring, fill)) * 255f));
-                    float edge = Mathf.Clamp01(1f - Mathf.Abs(d - 0.9f) * 16f);
-                    ringCols[y * px + x] = new Color32(255, 255, 255, (byte)(Mathf.Clamp01(edge) * 255f));
-                }
-            }
-            _pad.SetPixels32(cols); _pad.Apply();
-            _ringTex.SetPixels32(ringCols); _ringTex.Apply();
-        }
-
-        /// <summary>
-        /// 样式全部自建（不继承 GUI.skin.label / GUI.skin.button）：内置样式的字号、字体、
-        /// 背景贴图都不受控，手机上要的是自己定死字号。
-        /// 这里顺手读一次 GUI.skin 只是把内置默认皮肤实例化出来（GUI 函数只能在 OnGUI 里调，
-        /// 所以必须放在这里而不是 Awake）；真机上 HUD 整层不画的根因是 Strip Engine Code
-        /// 把原生 MonoBehaviour 裁掉了，见 Assets/link.xml 与 BuildScript 的注释。
-        /// </summary>
-        void EnsureStyles()
-        {
-            if (_body != null) return;
-            try { var _ = GUI.skin; } catch (System.Exception e) { Debug.LogWarning("[Aurora] GUI.skin: " + e.Message); }
-            if (_clearTex == null)
-            {
-                _clearTex = new Texture2D(1, 1, TextureFormat.RGBA32, false);
-                _clearTex.SetPixel(0, 0, new Color(0f, 0f, 0f, 0f));
-                _clearTex.Apply();
-            }
-            _body = Label(30);
-            _small = Label(22);
-            _big = Label(64, TextAnchor.MiddleCenter);
-            _center = Label(40, TextAnchor.MiddleCenter, true);
-            _boss = Label(26, TextAnchor.MiddleCenter);
-            _clear = Label(30, TextAnchor.MiddleCenter, true);
-            _btn = Button(28);
-            _btnPrimary = Button(34);
-            _empty = new GUIStyle { normal = { background = _clearTex } };
-        }
-
-        GUIStyle Label(int size, TextAnchor anchor = TextAnchor.UpperLeft, bool wrap = false)
-        {
-            return new GUIStyle
-            {
-                font = _font,
-                fontSize = size,
-                alignment = anchor,
-                wordWrap = wrap,
-                clipping = TextClipping.Clip,
-                normal = { textColor = Color.white },
-            };
-        }
-
-        GUIStyle Button(int size)
-        {
-            var st = Label(size, TextAnchor.MiddleCenter);
-            st.padding = new RectOffset(8, 8, 6, 6);
-            st.normal.background = _clearTex;
-            st.hover.background = _clearTex;
-            st.active.background = _clearTex;
-            st.focused.background = _clearTex;
-            return st;
+            // 没有粗体字重：用同一字体叠画偏移代替（见 BoldText）
+            _bold = _font;
         }
 
         void OnGUI()
@@ -108,405 +64,798 @@ namespace AuroraRift
             if (root == null) return;
             EnsureStyles();
 
-            float scale = Screen.height / RefH;
-            if (scale <= 0.01f) scale = 1f;
-            float w = Screen.width / scale;
+            float sc = Screen.height / RefH;
+            if (sc <= 0.01f) sc = 1f;
+            float w = Screen.width / sc;
 
-            Rect safe = Screen.safeArea;
-            float topInset = (Screen.height - safe.yMax) / scale;
-            float bottomInset = safe.yMin / scale;
+            var safe = Screen.safeArea;
+            float top = (Screen.height - safe.yMax) / sc;
+            float bottom = safe.yMin / sc;
+
+            if (root.State != _lastState) { _lastState = root.State; _stateAt = Time.unscaledTime; }
 
             var prev = GUI.matrix;
-            GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(scale, scale, 1f));
-            var white = Texture2D.whiteTexture;
-            var c = GUI.color;
+            GUI.matrix = Matrix4x4.TRS(Vector3.zero, Quaternion.identity, new Vector3(sc, sc, 1f));
+            var prevColor = GUI.color;
+
+            DrawStageFx(w, root);
 
             switch (root.State)
             {
-                case GameState.Menu: DrawMenu(root, w, topInset); break;
-                case GameState.Paused: DrawCombat(root, w, topInset, bottomInset); DrawPause(root, w); break;
-                case GameState.Dead: DrawCombat(root, w, topInset, bottomInset); DrawDead(root, w); break;
-                default: DrawCombat(root, w, topInset, bottomInset); break;
+                case GameState.Menu: DrawMenu(root, w, top, bottom); break;
+                case GameState.Paused:
+                    DrawCombat(root, w, top, bottom);
+                    DrawPause(root, w, top, bottom);
+                    break;
+                case GameState.Dead:
+                    DrawCombat(root, w, top, bottom);
+                    DrawDead(root, w, top, bottom);
+                    break;
+                default: DrawCombat(root, w, top, bottom); break;
             }
 
-            GUI.color = c;
+            GUI.color = prevColor;
             GUI.matrix = prev;
         }
 
-        // ---------------------------------------------------------------- 开始菜单
-        void DrawMenu(GameRoot root, float w, float topInset)
+        /// <summary>扫描线 + 暗角：网页版 .stage-scan / .stage-vignette 的效果。</summary>
+        void DrawStageFx(float w, GameRoot root)
         {
-            DrawText(_big, new Rect(0, 220 + topInset, w, 90), "AURORA RIFT", new Color(0.92f, 0.98f, 1f, 0.95f));
-            DrawText(_small, new Rect(60, 320 + topInset, w - 120, 40), "穿过裂隙，在弹幕之间起舞",
-                new Color(0.55f, 0.95f, 0.86f, 0.9f));
-
-            var dir = Director.Instance;
-            DrawText(_body, new Rect(60, 420 + topInset, w - 120, 50),
-                $"最佳 {root.Best}   最远星区 {(dir != null ? dir.Zone : root.StartZone)}/10",
-                new Color(0.85f, 0.9f, 1f, 0.9f));
-
-            // 难度三选（手机上以前只能 F1/F2/F3）
-            DrawText(_small, new Rect(60, 520 + topInset, w - 120, 36), "难度", new Color(0.7f, 0.8f, 0.95f, 0.9f));
-            float bw = (w - 120) / 3f;
-            var diffs = Difficulties.All;
-            for (int i = 0; i < diffs.Length; i++)
+            if (root.LowFx) { UiKit.Vignette(new Rect(0, 0, w, RefH), 0.35f); return; }
+            UiKit.Scanlines(new Rect(0, 0, w, RefH), 0.055f);
+            UiKit.Vignette(new Rect(0, 0, w, RefH), 0.55f);
+            // 低血量：边缘一圈玫红脉冲
+            var p = root.Player;
+            if (root.State == GameState.Playing && p != null && p.Hull <= 1)
             {
-                var r = new Rect(60 + i * (bw + 15), 560 + topInset, bw, 96);
-                bool on = root.Difficulty.Id == diffs[i].Id;
-                Panel(r,
-                    on ? new Color(0.16f, 0.62f, 0.56f, 0.85f) : new Color(0.10f, 0.14f, 0.22f, 0.75f),
-                    on ? new Color(0.42f, 0.98f, 0.90f, 0.95f) : new Color(0.42f, 0.50f, 0.66f, 0.55f));
-                DrawText(on ? _body : _small, new Rect(r.x + 6, r.y, r.width - 12, r.height), diffs[i].Name,
-                    on ? new Color(0.94f, 1f, 0.99f, 1f) : new Color(0.78f, 0.84f, 0.95f, 0.9f),
-                    TextAnchor.MiddleCenter);
-                if (GUI.Button(new Rect(r.x, r.y, r.width, r.height), GUIContent.none, _empty))
-                    root.SetDifficulty(diffs[i]);
+                float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4.2f);
+                UiKit.Vignette(new Rect(0, 0, w, RefH), 0.18f + pulse * 0.16f);
             }
-            DrawText(_small, new Rect(60, 668 + topInset, w - 120, 40), root.Difficulty.Note,
-                new Color(0.7f, 0.8f, 0.95f, 0.85f));
-
-            var startBtn = new Rect(w * 0.5f - 190, 780 + topInset, 380, 96);
-            Panel(startBtn, new Color(0.16f, 0.62f, 0.56f, 0.9f), new Color(0.42f, 0.98f, 0.90f, 1f));
-            if (GUI.Button(startBtn, "开始巡航", _btnPrimary))
-                root.StartRun();
-
-            DrawText(_small, new Rect(60, 940 + topInset, w - 120, 300),
-                "拖动 / 鼠标 驾驶 · 自动开火\nSHIFT 或右下「精准」环 精准模式\nSPACE 或「冲刺」环 冲刺穿弹 · X 或「星爆」环 释放星爆\n1/2/3 或点武器胶囊 换线 · P/Esc 暂停\n护盾 3 层 · 力场可抵消一次致命 · 擦弹攒星爆\n敌机打空一条线会失谐，换线攒共鸣",
-                new Color(0.62f, 0.7f, 0.85f, 0.9f));
-            DrawText(_small, new Rect(60, 1290 + topInset, w - 120, 34), "v0.16.0",
-                new Color(0.45f, 0.5f, 0.62f, 0.8f));
         }
 
-        // ---------------------------------------------------------------- 战斗界面
-        void DrawCombat(GameRoot root, float w, float topInset, float bottomInset)
+        // ---------------------------------------------------------------- 样式
+
+        void EnsureStyles()
         {
+            if (_body != null) return;
+            _eyebrow = Label(17, Muted);
+            _tiny = Label(15, Dimc);
+            _small = Label(19, Muted);
+            _body = Label(21, InkText);
+            _num = Label(40, Paper);
+            _numBig = Label(62, Paper);
+            _title = Label(118, Paper);
+
+            _h1 = Label(58, Paper, TextAnchor.MiddleLeft);
+            _h1c = Label(58, Paper, TextAnchor.MiddleCenter);
+            _h2 = Label(23, Dimc, TextAnchor.MiddleLeft);
+            _tag = Label(16, Rose, TextAnchor.MiddleCenter);
+            _kbd = Label(14, Dimc, TextAnchor.MiddleCenter);
+            _btn = Label(26, InkText, TextAnchor.MiddleCenter);
+            _btnBig = Label(29, new Color(0.02f, 0.06f, 0.11f), TextAnchor.MiddleCenter);
+
+            var c = Label(21, InkText, TextAnchor.MiddleCenter); _center = c;
+            _right = Label(19, Muted, TextAnchor.MiddleRight);
+            _wrap = Label(20, Muted, TextAnchor.UpperLeft);
+            _wrap.wordWrap = true;
+
+            // 只吃输入、不画背景的按钮样式（HUD 里所有可点元素都用它）
+            _invisible = new GUIStyle { normal = { background = null }, hover = { background = null }, active = { background = null } };
+        }
+
+        GUIStyle Label(int size, Color color, TextAnchor anchor = TextAnchor.UpperLeft)
+        {
+            return new GUIStyle
+            {
+                font = _font,
+                fontSize = size,
+                alignment = anchor,
+                wordWrap = false,
+                clipping = TextClipping.Clip,
+                richText = false,
+                // 颜色一律由 GUI.color 在绘制时给：样式自带颜色会和它相乘，导致字被"暗两次"
+                normal = { textColor = Color.white },
+            };
+        }
+
+        // ---------------------------------------------------------------- 文字
+
+        void Txt(GUIStyle st, Rect r, string s, Color c) => Txt(st, r, s, c, null);
+
+        void Txt(GUIStyle st, Rect r, string s, Color c, TextAnchor? anchor)
+        {
+            if (string.IsNullOrEmpty(s)) return;
+            var prev = GUI.color;
+            GUI.color = c;
+            var style = st;
+            if (anchor.HasValue && st.alignment != anchor.Value)
+                style = new GUIStyle(st) { alignment = anchor.Value };
+            GUI.Label(r, s, style);
+            GUI.color = prev;
+        }
+
+        /// <summary>粗体感：同一串字叠画一次微小偏移（Noto 只有 Regular 字重）。</summary>
+        void Bold(GUIStyle st, Rect r, string s, Color c, float px = 2.4f)
+        {
+            Txt(st, new Rect(r.x + px * 0.5f, r.y, r.width + px, r.height), s, c);
+            Txt(st, new Rect(r.x - px * 0.5f, r.y, r.width + px, r.height), s, c);
+        }
+
+        /// <summary>带辉光的标题（菜单大标题 / 结算分数）。</summary>
+        void GlowText(GUIStyle st, Rect r, string s, Color c, Color glow, TextAnchor anchor)
+        {
+            var g = st;
+            if (g.alignment != anchor) g = new GUIStyle(st) { alignment = anchor };
+            Txt(g, new Rect(r.x - 2, r.y, r.width, r.height), s, new Color(glow.r, glow.g, glow.b, 0.25f));
+            Txt(g, new Rect(r.x + 2, r.y + 2, r.width, r.height), s, new Color(glow.r, glow.g, glow.b, 0.18f));
+            Bold(g, r, s, c, 2.6f);
+        }
+
+        static Rect R(float x, float y, float w, float h) => new Rect(x, y, w, h);
+        static Rect Center(float w, float y, float width, float height) => new Rect(w * 0.5f - width * 0.5f, y, width, height);
+        static Rect Cx(float cx, float cy, float w, float h) => new Rect(cx - w * 0.5f, cy - h * 0.5f, w, h);
+
+        // ---------------------------------------------------------------- 开始菜单
+
+        void DrawMenu(GameRoot root, float w, float top, float bottom)
+        {
+            var dir = Director.Instance;
+            float t = Time.unscaledTime - _stateAt;
+            float pad = 40f;
+            float cx = w * 0.5f;
+
+            // 背景压暗 + 顶部网格光
+            var scrim = new Rect(0, 0, w, RefH);
+            GUI.color = new Color(0.016f, 0.024f, 0.059f, 0.93f);
+            GUI.DrawTexture(scrim, UiKit.White);
+            GUI.color = Color.white;
+            UiKit.Glow(R(0, -220, w * 1.4f, 900), new Color(0.41f, 0.96f, 0.86f, 0.10f));
+
+            float y = top + 118f;
+
+            // --- 品牌标记：双层菱形环 + 金色核心（嵌套菱形做环）---
+            {
+                float mc = cx, my = y + 54f;
+                float pulse = 1f + Mathf.Sin(Time.unscaledTime * 1.7f) * 0.035f;
+                UiKit.Glow(Cx(mc, my, 190f, 190f), new Color(Gold.r, Gold.g, Gold.b, 0.10f));
+                DiamondRing(mc, my, 104f * pulse, Teal);
+                DiamondRing(mc, my, 72f * pulse, Violet);
+                UiKit.Sprite(Cx(mc, my, 30f * pulse, 30f * pulse), UiKit.Diamond, Gold);
+                y += 136f;
+            }
+
+            float rise1 = Rise(t, 0.02f);
+            Txt(_eyebrow, Center(w, y + rise1, 700, 24), Sp("DEEP SPACE ARCADE"), TealDim);
+            y += 44f;
+
+            float rise2 = Rise(t, 0.06f);
+            GlowText(_title, Center(w, y + rise2, w - 80, 140), "太空战斗机", Paper,
+                new Color(Teal.r, Teal.g, Teal.b, 1f), TextAnchor.MiddleCenter);
+            y += 146f;
+
+            TextWithRules(Center(w, y, 620, 26), "AURORA RIFT   //   星穹涅槃", Muted, Line(0.28f));
+            y += 44f;
+            Txt(_small, Center(w, y, 700, 30), "穿过裂隙，在弹幕之间起舞。", Muted);
+            y += 56f;
+
+            // --- 特性胶囊（两列）---
+            string[] chips = { "12 种敌机 · 3 词缀", "22 种 Boss 招式 · 破防", "相位冲刺", "3 条武器线 ×5 级", "4 类僚机 · 3 层护盾", "10 个星区" };
+            float chipW = 300f;
+            for (int i = 0; i < chips.Length; i++)
+            {
+                int col = i % 2, row = i / 2;
+                var r = R(cx - chipW - 6f + col * (chipW + 12f), y + row * 40f, chipW, 34f);
+                UiKit.Pill(r, new Color(0.027f, 0.043f, 0.10f, 0.42f), Line(0.12f));
+                Txt(_tiny, r, chips[i], new Color(Muted.r, Muted.g, Muted.b, 0.92f));
+            }
+            y += 3 * 40f + 18f;
+
+            // --- 战绩卡 ---
+            {
+                var card = Center(w, y, 640f, 132f);
+                UiKit.Panel(card, new Color(0.027f, 0.043f, 0.10f, 0.52f), Line(0.13f), 16f);
+                Txt(_tiny, R(card.x + 40f, card.y + 26f, 260f, 24f), Sp("BEST SCORE"), Dimc);
+                Bold(_num, R(card.x + 40f, card.y + 54f, 300f, 56f), root.Best.ToString(), Paper, 2f);
+                UiKit.Line(R(card.center.x, card.y + 30f, 2f, 72f), Line(0.16f));
+                Txt(_tiny, R(card.center.x + 40f, card.y + 26f, 260f, 24f), "最远星区", Dimc);
+                Bold(_num, R(card.center.x + 40f, card.y + 54f, 300f, 56f),
+                    (dir != null ? dir.Zone : 1).ToString("00"), Paper, 2f);
+                y += 168f;
+            }
+
+            // --- 难度三选 ---
+            var diffs = Difficulties.All;
+            float pickW = 640f, segW = (pickW - 12f) / 3f;
+            var picker = Center(w, y, pickW, 96f);
+            UiKit.Pill(picker, new Color(0.027f, 0.043f, 0.10f, 0.55f), Line(0.13f));
+            for (int i = 0; i < diffs.Length; i++)
+            {
+                var r = R(picker.x + 6f + i * segW, picker.y + 6f, segW - 4f, 84f);
+                bool on = root.Difficulty.Id == diffs[i].Id;
+                if (on)
+                {
+                    var accent = diffs[i].Id == "abyss" ? Rose : Teal;
+                    UiKit.Pill(r, new Color(accent.r, accent.g, accent.b, 0.14f), new Color(accent.r, accent.g, accent.b, 0.5f));
+                }
+                Txt(Label(21, on ? (diffs[i].Id == "abyss" ? Rose : Teal) : Dimc, TextAnchor.MiddleCenter),
+                    R(r.x, r.y + 14f, r.width, 30f), diffs[i].Name, on ? (diffs[i].Id == "abyss" ? Rose : Teal) : Dimc);
+                Txt(_tiny, R(r.x, r.y + 48f, r.width, 22f), Sp(diffs[i].Id.ToUpperInvariant()),
+                    new Color(Dimc.r, Dimc.g, Dimc.b, 0.75f));
+                if (GUI.Button(r, GUIContent.none, _invisible)) root.SetDifficulty(diffs[i]);
+            }
+            y += 110f;
+            Txt(_tiny, Center(w, y, 700, 26), root.Difficulty.Note, Dimc);
+            y += 54f;
+
+            // --- 开始按钮 ---
+            {
+                var btn = Center(w, y, 560f, 108f);
+                var prev = GUI.color;
+                UIButtonFrame(btn, true);
+                Txt(_btnBig, btn, "开始巡航", new Color(0.02f, 0.06f, 0.11f, 1f));
+                Txt(_kbd, R(btn.xMax - 56f, btn.y + 44f, 44f, 20f), "ENTER", new Color(0.02f, 0.06f, 0.11f, 0.45f));
+                // 播放三角
+                UiKit.Sprite(Cx(btn.x + 58f, btn.center.y, 22f, 26f), UiKit.TriRight, new Color(0.02f, 0.06f, 0.11f, 0.9f));
+                if (GUI.Button(btn, GUIContent.none, _invisible)) root.StartRun();
+                GUI.color = prev;
+            }
+
+            // --- 操作提示（贴底两列）---
+            float hintsTop = RefH - bottom - 430f;
+            string[][] hints =
+            {
+                new[] { "拖动", "飞行 · 自动开火" },
+                new[] { "武器卡", "点按切换武器线" },
+                new[] { "精准", "慢速 + 收束 + 判定点" },
+                new[] { "冲刺", "穿弹短暂无敌" },
+                new[] { "星爆", "擦弹充能后释放" },
+                new[] { "暂停", "右上角 II 或 P" },
+            };
+            float colW = 300f, rowH = 74f;
+            for (int i = 0; i < hints.Length; i++)
+            {
+                int col = i % 2, row = i / 2;
+                var r = R(cx - colW - 6f + col * (colW + 12f), hintsTop + row * rowH, colW, rowH - 10f);
+                UiKit.Panel(r, new Color(0.027f, 0.043f, 0.10f, 0.34f), Line(0.09f), 12f);
+                var key = R(r.x + 12f, r.y + (r.height - 40f) * 0.5f, 84f, 40f);
+                UiKit.Panel(key, new Color(0.04f, 0.067f, 0.14f, 0.6f), Line(0.16f), 4f);
+                Txt(_kbd, key, hints[i][0], Teal);
+                Txt(_small, R(key.xMax + 14f, r.y, r.width - key.width - 22f, r.height), hints[i][1],
+                    new Color(Muted.r, Muted.g, Muted.b, 0.95f), TextAnchor.MiddleLeft);
+            }
+
+            Txt(_tiny, Center(w, RefH - bottom - 46f, 900f, 24f),
+                Sp("v0.17.0") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
+        }
+
+        /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
+        void DiamondRing(float cx, float cy, float size, Color c)
+        {
+            UiKit.Sprite(Cx(cx, cy, size, size), UiKit.Diamond, new Color(c.r, c.g, c.b, 0.35f));
+            float inner = size - 9f;
+            UiKit.Sprite(Cx(cx, cy, inner, inner), UiKit.Diamond, new Color(0.016f, 0.024f, 0.059f, 1f));
+            UiKit.Sprite(Cx(cx, cy, inner, inner), UiKit.Diamond, new Color(c.r, c.g, c.b, 0.10f));
+        }
+
+        static Rect Inset(Rect r, float d) => new Rect(r.x + d, r.y + d, r.width - d * 2f, r.height - d * 2f);
+
+        static float Rise(float t, float delay)
+        {
+            float k = Mathf.Clamp01((t - delay) / 0.45f);
+            return (1f - k) * 24f;
+        }
+
+        /// <summary>两端带横线的居中说明文字（网页版 .overline 的观感）。</summary>
+        void TextWithRules(Rect r, string s, Color c, Color rule)
+        {
+            var tmp = Label(19, c, TextAnchor.MiddleCenter);
+            float tw = tmp.CalcSize(new GUIContent(s)).x;
+            tw = Mathf.Min(tw, r.width - 200f);
+            var text = R(r.center.x - tw * 0.5f, r.y, tw, r.height);
+            Txt(tmp, text, s, c);
+            UiKit.Line(R(r.x, r.y + r.height * 0.5f - 1f, text.x - r.x - 22f, 2f), rule);
+            UiKit.Line(R(text.xMax + 22f, r.y + r.height * 0.5f - 1f, r.xMax - text.xMax - 22f, 2f), rule);
+        }
+
+        /// <summary>字母加宽（网页版 .26em letter-spacing）——IMGUI 没有字距，用空格模拟。</summary>
+        static string Sp(string s)
+        {
+            if (string.IsNullOrEmpty(s)) return s;
+            var sb = new System.Text.StringBuilder(s.Length * 2);
+            for (int i = 0; i < s.Length; i++)
+            {
+                if (i > 0) sb.Append(' ');
+                sb.Append(s[i]);
+            }
+            return sb.ToString();
+        }
+
+        // ---------------------------------------------------------------- 战斗 HUD
+
+        void DrawCombat(GameRoot root, float w, float top, float bottom)
+        {
+            float pad = 40f;
             var p = root.Player;
             var dir = Director.Instance;
 
-            // ---- 顶栏：分数 / 最佳 / 擦弹 / 星区 ----
-            DrawText(_body, new Rect(30, 24 + topInset, w * 0.62f, 56),
-                $"分数 {Mathf.RoundToInt(root.Score)}   最佳 {root.Best}",
-                new Color(0.92f, 0.95f, 1f, 0.95f));
-            DrawText(_small, new Rect(30, 78 + topInset, w * 0.62f, 34),
-                $"擦弹 {root.Stats.Graze}   连锁 ×{root.Multiplier}",
-                new Color(0.55f, 0.95f, 0.86f, 0.9f));
+            // 顶/底渐变压暗，让白字在任何背景下都可读
+            var prev = GUI.color;
+            GUI.color = new Color(0.016f, 0.024f, 0.059f, 0.55f);
+            GUI.DrawTexture(R(0, 0, w, 190f + top), UiKit.White);
+            GUI.color = new Color(0.016f, 0.024f, 0.059f, 0.62f);
+            GUI.DrawTexture(R(0, RefH - bottom - 150f, w, 150f + bottom), UiKit.White);
+            GUI.color = prev;
+
+            // ---- 左上：分数块 ----
+            Txt(_eyebrow, R(pad, top + 22f, 420f, 24f), Sp("SCORE"), Muted);
+            Bold(_numBig, R(pad, top + 44f, 460f, 70f), Mathf.RoundToInt(root.Score).ToString("N0"), Paper, 2f);
+            Txt(_tiny, R(pad, top + 116f, 300f, 24f), "BEST ", Dimc);
+            Txt(_small, R(pad + 58f, top + 113f, 300f, 26f), root.Best.ToString("N0"), new Color(Gold.r, Gold.g, Gold.b, 0.85f));
+            Txt(_tiny, R(pad, top + 144f, 300f, 24f), "GRAZE ", Dimc);
+            Txt(_small, R(pad + 72f, top + 141f, 300f, 26f), root.Stats.Graze.ToString(), Teal);
+
+            // ---- 中上：星区 ----
             if (dir != null)
             {
-                // 右边界停在暂停环左侧 18px：原来用 w*0.92 收尾，1080 宽的机器上会压到 II 上
-                DrawText(_small, new Rect(w * 0.36f, 24 + topInset, w * 0.64f - 120f, 40),
-                    $"{dir.WaveLabel} · {root.Difficulty.Name}", new Color(0.7f, 0.8f, 0.95f, 0.9f),
-                    TextAnchor.UpperRight);
+                Txt(Label(17, TealDim, TextAnchor.MiddleCenter), R(w * 0.5f - 220f, top + 22f, 440f, 24f), Sp("SECTOR"), TealDim);
+                Bold(_num, R(w * 0.5f - 220f, top + 44f, 440f, 52f), dir.Zone.ToString("00"), Teal, 1.6f);
+                Txt(Label(19, Dimc, TextAnchor.MiddleCenter), R(w * 0.5f - 220f, top + 94f, 440f, 26f),
+                    dir.ZoneName, Muted);
             }
 
-            // ---- 右上暂停键（与 Controls.PauseRect 同一块矩形）----
-            // 注意：这里只能画，不能挂 GUI.Button。触屏会被 Unity 合成成鼠标事件，
-            // GUI.Button 和 Controls.ConsumePress 各调一次 TogglePause，正好抵消——
-            // 真机上就是"点暂停毫无反应"。热区判定统一交给 Controls。
+            // ---- 右上：暂停 ----
             var pause = Controls.PauseRect;
-            GUI.color = new Color(1f, 1f, 1f, 0.22f);
-            GUI.DrawTexture(pause, _ringTex);
-            GUI.color = new Color(0.9f, 0.95f, 1f, 0.9f);
-            DrawText(_small, pause, "II", new Color(0.9f, 0.95f, 1f, 0.9f), TextAnchor.MiddleCenter);
+            UiKit.Pill(pause, new Color(0.039f, 0.067f, 0.14f, 0.55f), Line(0.16f));
+            UiKit.Line(R(pause.center.x - 7f, pause.center.y - 14f, 5f, 28f), new Color(Muted.r, Muted.g, Muted.b, 0.9f));
+            UiKit.Line(R(pause.center.x + 2f, pause.center.y - 14f, 5f, 28f), new Color(Muted.r, Muted.g, Muted.b, 0.9f));
 
-            if (p == null) return;
+            // ---- 连锁 ----
+            if (root.Combo > 0)
+            {
+                float bx = w - pad - 170f;
+                float by = top + (dir != null && dir.Boss != null ? 236f : 150f);
+                Txt(Label(54, Gold, TextAnchor.MiddleRight), R(bx, by, 170f, 64f), "×" + root.Multiplier, Gold);
+                Txt(Label(16, Dimc, TextAnchor.MiddleRight), R(bx, by + 62f, 170f, 22f), "CHAIN " + root.Combo, Muted);
+                var track = R(bx + 38f, by + 88f, 132f, 4f);
+                UiKit.Line(track, new Color(Gold.r, Gold.g, Gold.b, 0.16f));
+                UiKit.Gradient(R(track.x, track.y, track.width * root.ComboRatio, track.height), UiKit.GradGold, new Color(1, 1, 1, 0.9f));
+            }
+
+            if (dir != null && dir.Boss != null) DrawBossPanel(root, w, top, dir.Boss);
+            if (p != null) DrawBottom(root, w, bottom);
+
+            if (root.State != GameState.Dead)
+            {
+                DrawAnnounce(root, w, top);
+                DrawHintToast(root, w, bottom);
+            }
+        }
+
+        void DrawBossPanel(GameRoot root, float w, float top, BossController b)
+        {
+            float pad = 40f;
+            var card = R(pad, top + 150f, w - pad * 2f, 132f);
+            UiKit.Panel(card, new Color(0.047f, 0.031f, 0.086f, 0.72f), new Color(Rose.r, Rose.g, Rose.b, 0.18f), 12f);
+
+            // THREAT 标签
+            var tag = R(card.x + 20f, card.y + 16f, 96f, 26f);
+            UiKit.Panel(tag, new Color(Rose.r, Rose.g, Rose.b, 0.08f), new Color(Rose.r, Rose.g, Rose.b, 0.4f), 4f);
+            Txt(Label(15, Rose, TextAnchor.MiddleCenter), tag, Sp("THREAT"), Rose);
+
+            string name = b.BossLabel;
+            Txt(Label(26, Paper, TextAnchor.MiddleLeft), R(tag.xMax + 14f, card.y + 12f, 420f, 34f), name, Paper);
+            Txt(Label(18, Dimc, TextAnchor.MiddleLeft), R(tag.xMax + 14f + 210f, card.y + 16f, 420f, 28f),
+                b.BossTitle, new Color(Dimc.r, Dimc.g, Dimc.b, 0.95f));
+
+            // 阶段徽章（临界换成金色脉冲）
+            var phase = R(card.xMax - 96f, card.y + 14f, 76f, 28f);
+            var phaseCol = b.Critical ? Gold : Rose;
+            UiKit.Pill(phase, new Color(phaseCol.r, phaseCol.g, phaseCol.b, b.Critical ? 0.14f : 0.02f),
+                new Color(phaseCol.r, phaseCol.g, phaseCol.b, b.Critical ? 0.5f : 0f));
+            Txt(Label(16, phaseCol, TextAnchor.MiddleCenter), phase,
+                b.Critical ? Sp("CRIT") : "P" + (b.Phase + 1), phaseCol);
+
+            // 血条 + 分段刻线
+            var track = R(card.x + 20f, card.y + 58f, card.width - 40f, 12f);
+            UiKit.Pill(track, new Color(1f, 1f, 1f, 0.07f), new Color(Rose.r, Rose.g, Rose.b, 0.14f));
+            float frac = Mathf.Clamp01(b.Hp / Mathf.Max(1f, b.MaxHp));
+            if (frac > 0.001f)
+                UiKit.Gradient(R(track.x + 2f, track.y + 2f, (track.width - 4f) * frac, track.height - 4f), UiKit.GradRose, Color.white);
+            for (int i = 1; i < 4; i++)
+                UiKit.Line(R(track.x + track.width * (i * 0.25f), track.y + 1f, 2f, track.height - 2f), new Color(0.016f, 0.024f, 0.059f, 0.75f));
+
+            // 破防槽
+            var brk = R(card.x + 20f, card.y + 78f, card.width - 40f, 6f);
+            UiKit.Pill(brk, new Color(Gold.r, Gold.g, Gold.b, 0.10f), Color.clear);
+            float bf = Mathf.Clamp01(b.BreakGauge / Mathf.Max(1f, b.BreakMax));
+            if (bf > 0.001f)
+                UiKit.Line(R(brk.x, brk.y, brk.width * bf, brk.height), new Color(Gold.r, Gold.g, Gold.b, 0.75f));
+
+            // 招式名（蓄招中才亮）
+            if (b.TelegraphLeft > 0f)
+            {
+                float pulse = 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 14f);
+                Txt(Label(17, Gold, TextAnchor.MiddleLeft), R(card.x + 20f, card.y + 96f, card.width - 40f, 24f),
+                    Sp("CAST") + "   " + BossMoves.Name(b.CurrentMove), new Color(Gold.r, Gold.g, Gold.b, pulse));
+            }
+            else
+            {
+                string hp = Mathf.RoundToInt(b.Hp) + " / " + Mathf.RoundToInt(b.MaxHp);
+                Txt(Label(17, Dimc, TextAnchor.MiddleRight), R(card.x + 20f, card.y + 96f, card.width - 40f, 24f), hp, Dimc);
+            }
+        }
+
+        void DrawBottom(GameRoot root, float w, float bottom)
+        {
+            float pad = 40f;
+            float bandTop = Controls.BandTop;
+            var p = root.Player;
             var line = GameConfig.Line(p.Weapons.ActiveId);
 
-            // ---- 底部仪表带（与 Controls 同一坐标系）----
-            float bandY = Controls.BandTop;
-            var hullCol = p.Hull <= 1 ? new Color(1f, 0.42f, 0.42f) : new Color(0.41f, 0.96f, 0.86f);
-            for (int i = 0; i < Mathf.Max(3, p.Hull); i++)
+            // ---- 左：生存状态（上排舰体、下排护盾）----
+            float x = pad;
+            float cy = bandTop + 54f;
+            for (int i = 0; i < 5; i++)
             {
-                var r = new Rect(40 + i * 26, bandY, 18, 12);
-                GUI.color = i < p.Hull ? hullCol : new Color(1f, 1f, 1f, 0.14f);
-                GUI.DrawTexture(r, Texture2D.whiteTexture);
+                var r = R(x + i * 26f, cy - 9f, 18f, 18f);
+                bool on = i < p.Hull;
+                UiKit.Sprite(r, UiKit.TriDown, on ? Teal : new Color(Muted.r, Muted.g, Muted.b, 0.16f));
             }
             for (int i = 0; i < GameConfig.MaxShields; i++)
             {
-                var r = new Rect(40 + i * 22, bandY + 20, 16, 16);
-                GUI.color = i < p.Shields ? new Color(0.61f, 0.55f, 1f, 0.95f) : new Color(0.61f, 0.55f, 1f, 0.22f);
-                GUI.DrawTexture(r, _ringTex);
-            }
-            DrawText(_small, new Rect(40, bandY + 42, 320, 32),
-                $"舰体 {p.Hull}   护盾 {p.Shields}/{GameConfig.MaxShields}",
-                new Color(0.85f, 0.9f, 1f, 0.85f));
-
-            // 蓄能环（圆心是共鸣层数）
-            float cx = w * 0.5f + 40f, cy = bandY + 62f, rr = 34;
-            GUI.color = new Color(1f, 1f, 1f, 0.16f);
-            GUI.DrawTexture(new Rect(cx - rr, cy - rr, rr * 2, rr * 2), _ringTex);
-            float charge = Mathf.Clamp01(p.Weapons.Active.Charge / 100f);
-            GUI.color = p.Weapons.Active.Detuned ? new Color(1f, 0.5f, 0.4f, 0.95f) : line.Tint;
-            DrawArc(cx, cy, rr - 3, -90f, -90f + 360f * charge, 5f);
-            DrawText(_small, new Rect(cx - rr, cy - 16, rr * 2, 32),
-                p.Weapons.Resonance > 0 ? "×" + Mathf.RoundToInt(p.Weapons.Resonance) : "",
-                p.Weapons.Resonance >= 3 ? new Color(1f, 0.82f, 0.45f) : new Color(0.85f, 0.95f, 1f, 0.9f),
-                TextAnchor.MiddleCenter);
-
-            string wname = (p.Weapons.Active.Detuned ? "失谐排气" : line.Label) + " LV." + p.Weapons.Active.Level;
-            DrawText(_small, new Rect(cx - 120, cy - rr - 34, 240, 28), wname, line.Tint, TextAnchor.MiddleCenter);
-            for (int i = 0; i < 5; i++)
-            {
-                var r = new Rect(cx - 26 + i * 12, cy - rr - 6, 9, 4);
-                GUI.color = i < p.Weapons.Active.Level ? line.Tint : new Color(1f, 1f, 1f, 0.18f);
-                GUI.DrawTexture(r, Texture2D.whiteTexture);
+                var r = R(x + i * 26f + 2f, cy + 16f, 16f, 16f);
+                bool on = i < p.Shields;
+                UiKit.Sprite(r, UiKit.Hex, on ? Violet : new Color(Violet.r, Violet.g, Violet.b, 0.26f));
             }
 
-            // 星区进度轨 + Boss 节点
-            float trackW = 150, trackX = w * 0.5f - trackW * 0.5f, trackY = bandY - 12;
-            GUI.color = new Color(1f, 1f, 1f, 0.16f);
-            GUI.DrawTexture(new Rect(trackX, trackY, trackW, 3), Texture2D.whiteTexture);
-            float prog = dir != null ? dir.ZoneProgress * 0.86f : 0f;
-            GUI.color = line.Tint;
-            GUI.DrawTexture(new Rect(trackX, trackY, trackW * prog, 3), Texture2D.whiteTexture);
-            GUI.color = dir != null && dir.Boss != null ? new Color(1f, 0.44f, 0.57f) : new Color(1f, 1f, 1f, 0.4f);
-            GUI.DrawTexture(new Rect(trackX + trackW - 5, trackY - 3, 9, 9), Texture2D.whiteTexture);
-
-            // ---- 右侧三枚动作环：精准 / 冲刺 / 星爆 ----
-            DrawRing(Controls.PrecisionRect, "精准", p.FocusHeld ? 1f : 0f, line.Tint, p.FocusHeld);
-            DrawRing(Controls.DashRect, p.DashCd > 0f ? p.DashCd.ToString("0.0") + "s" : "冲刺",
-                1f - Mathf.Clamp01(p.DashCd / GameConfig.DashCooldown),
-                new Color(0.55f, 0.95f, 0.86f), p.DashCd <= 0f);
-            DrawRing(Controls.NovaRect, p.Nova >= 100f ? "星爆" : Mathf.RoundToInt(p.Nova) + "%",
-                Mathf.Clamp01(p.Nova / 100f),
-                p.Nova >= 100f && p.Overdrive <= 0f ? new Color(1f, 0.82f, 0.45f) : line.Tint,
-                p.Nova >= 100f);
-            // 武器胶囊（点一下循环换线）
-            var cap = Controls.WeaponRect;
-            Panel(cap, new Color(0.10f, 0.14f, 0.22f, 0.72f),
-                new Color(line.Tint.r, line.Tint.g, line.Tint.b, 0.7f));
-            DrawText(_small, new Rect(cap.x + 4, cap.y, cap.width - 8, cap.height),
-                "换线 · " + line.Label, line.Tint, TextAnchor.MiddleCenter);
-
-            // ---- 连锁倍率盒 ----
-            if (root.Combo > 0)
+            // ---- 左中：武器胶囊（充能环 + 共鸣角标 + 名称 + 5 格等级）----
             {
-                var box = new Rect(w - 200, 150 + topInset, 170, 86);
-                DrawText(new GUIStyle(_big) { fontSize = 40 }, new Rect(box.x, box.y, box.width, 52),
-                    "×" + root.Multiplier, new Color(1f, 0.82f, 0.45f, 0.95f), TextAnchor.MiddleCenter);
-                GUI.color = new Color(1f, 0.82f, 0.45f, 0.8f);
-                GUI.DrawTexture(new Rect(box.x + 52, box.y + 60, 66 * root.ComboRatio, 2), Texture2D.whiteTexture);
-                DrawText(_small, new Rect(box.x, box.y + 64, box.width, 24), "CHAIN " + root.Combo,
-                    new Color(0.85f, 0.9f, 1f, 0.75f), TextAnchor.MiddleCenter);
-            }
+                var cap = Controls.WeaponRect;
+                float ringSize = 52f;
+                var ring = Cx(cap.x + ringSize * 0.5f + 4f, cap.center.y, ringSize, ringSize);
+                UiKit.Arc(ring, Mathf.Clamp01(p.Weapons.Active.Charge / 100f),
+                    p.Weapons.Active.Detuned ? Rose : line.Tint, 5f);
+                UiKit.Arc(Ring(ring, -6f), 1f, new Color(1f, 1f, 1f, 0.06f), 1f);
+                if (p.Weapons.Resonance > 0.05f)
+                    Txt(Label(15, Gold, TextAnchor.MiddleCenter), ring, "×" + Mathf.RoundToInt(p.Weapons.Resonance), Gold);
 
-            // ---- Boss 面板 ----
-            var boss = dir != null ? dir.Boss : null;
-            if (boss != null)
-            {
-                float pct = Mathf.Clamp01(boss.Hp / Mathf.Max(1f, boss.MaxHp));
-                var barBg = new Rect(w * 0.5f - 320, 128 + topInset, 640, 14);
-                GUI.color = new Color(1f, 1f, 1f, 0.15f);
-                GUI.DrawTexture(barBg, Texture2D.whiteTexture);
-                GUI.color = boss.Critical ? new Color(1f, 0.35f, 0.3f) : new Color(1f, 0.72f, 0.35f);
-                GUI.DrawTexture(new Rect(barBg.x, barBg.y, barBg.width * pct, barBg.height), Texture2D.whiteTexture);
-                // 相位刻度（66% / 30%）
-                GUI.color = new Color(0f, 0f, 0f, 0.5f);
-                GUI.DrawTexture(new Rect(barBg.x + barBg.width * (1f - GameConfig.BossPhaseHigh), barBg.y, 2, barBg.height), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(barBg.x + barBg.width * (1f - GameConfig.BossPhaseLow), barBg.y, 2, barBg.height), Texture2D.whiteTexture);
-                // 破防槽
-                GUI.color = boss.BreakGauge >= boss.BreakMax ? Color.white : new Color(1f, 0.82f, 0.45f, 0.9f);
-                GUI.DrawTexture(new Rect(barBg.x, barBg.y + barBg.height + 3,
-                    barBg.width * Mathf.Clamp01(boss.BreakGauge / Mathf.Max(1f, boss.BreakMax)), 3), Texture2D.whiteTexture);
-
-                string flag = boss.Critical ? " · 临界" : "";
-                string tele = boss.TelegraphLeft > 0f ? "   蓄招 · " + BossMoves.Name(boss.CurrentMove) : "";
-                DrawText(_boss, new Rect(w * 0.5f - 400, barBg.yMax + 10, 800, 40),
-                    $"BOSS {Mathf.RoundToInt(pct * 100f)}%   破防 {Mathf.RoundToInt(boss.BreakGauge / Mathf.Max(1f, boss.BreakMax) * 100f)}%{flag}{tele}",
-                    boss.TelegraphLeft > 0f ? new Color(1f, 0.6f, 0.45f) : new Color(1f, 0.82f, 0.6f));
-            }
-
-            // ---- 击破结算明细（Boss 死后 5 秒）----
-            if (root.LastClearLines != null)
-            {
-                float age = Time.unscaledTime - root.LastClearAt;
-                if (age < 5f)
+                var nameCol = p.Weapons.Active.Detuned ? Rose : InkText;
+                Txt(Label(20, nameCol, TextAnchor.MiddleLeft), R(ring.xMax + 12f, cap.y + 4f, 150f, 26f),
+                    line.Label, nameCol);
+                for (int i = 0; i < 5; i++)
                 {
-                    float a = Mathf.Clamp01(5f - age);
-                    DrawText(_clear, new Rect(w * 0.5f - 400, RefH * 0.26f, 800, 300),
-                        "核心击破结算\n" + string.Join("\n", root.LastClearLines),
-                        new Color(0.55f, 1f, 0.85f, a));
+                    var pip = R(ring.xMax + 12f + i * 22f, cap.y + 36f, 16f, 6f);
+                    bool on = i < p.Weapons.Level;
+                    UiKit.Line(pip, on ? line.Tint : new Color(0.63f, 0.71f, 1f, 0.18f));
+                }
+                if (p.Weapons.Active.Detuned)
+                    Txt(Label(15, Rose, TextAnchor.MiddleLeft), R(ring.xMax + 12f, cap.y + 46f, 160f, 20f), "失谐排气", Rose);
+            }
+
+            // ---- 中：星区进度轨 + 终点菱形 ----
+            {
+                var dir = Director.Instance;
+                float railX = Controls.WeaponRect.xMax + 26f;
+                float railW = w - railX - 330f;
+                if (railW > 60f)
+                {
+                    var rail = R(railX, bandTop + 58f, railW, 6f);
+                    UiKit.Pill(rail, new Color(0.63f, 0.71f, 1f, 0.12f), Color.clear);
+                    float prog = dir != null ? dir.RailProgress : 0f;
+                    var col = dir != null && dir.State == Director.RunState.Boss ? Rose
+                            : dir != null && dir.State == Director.RunState.Clearing ? Gold : Teal;
+                    if (prog > 0.002f)
+                        UiKit.Line(R(rail.x, rail.y, rail.width * prog, rail.height), new Color(col.r, col.g, col.b, 0.9f));
+                    var mark = Cx(rail.xMax + 8f, rail.y + rail.height * 0.5f, 12f, 12f);
+                    UiKit.Sprite(mark, UiKit.Diamond,
+                        dir != null && dir.State == Director.RunState.Boss ? Rose : new Color(0.63f, 0.71f, 1f, 0.3f));
                 }
             }
 
-            // ---- 公告 / 教学 / 吐司 ----
-            DrawTimed(root.Banner, BannerAt(root), new Rect(w * 0.5f - 400, RefH * 0.38f, 800, 80),
-                _center, new Color(1f, 0.45f, 0.35f), 2.6f);
-            DrawTimed(root.Hint, HintAt(root), new Rect(60, Controls.BandTop - 60, w - 120, 40),
-                _small, new Color(0.85f, 0.95f, 1f, 0.85f), 4.5f);
-            DrawTimed(root.Toast, ToastAt(root), new Rect(60, Controls.BandTop - 100, w - 120, 36),
-                _small, new Color(1f, 0.82f, 0.45f, 0.9f), 1.8f);
+            // ---- 右：三枚动作环 ----
+            DrawActionRing(Controls.PrecisionRect, "精准", p.FocusHeld ? "慢速" : "慢速",
+                p.FocusHeld ? 1f : 0f, Teal, p.FocusHeld, false);
+            DrawActionRing(Controls.DashRect, "冲刺",
+                p.DashCd > 0f ? p.DashCd.ToString("0.0") + "s" : "闪避",
+                1f - Mathf.Clamp01(p.DashCd / GameConfig.DashCooldown), Teal, p.DashCd <= 0f, false);
+            DrawActionRing(Controls.NovaRect, "星爆",
+                p.Nova >= 100f ? "READY" : Mathf.RoundToInt(p.Nova) + "%",
+                Mathf.Clamp01(p.Nova / 100f), p.Nova >= 100f ? Gold : Teal, p.Nova >= 100f, p.Nova >= 100f);
+        }
 
-            // 一命以下：屏幕边缘红色渐晕
-            if (p.Hull <= 1)
+        void DrawActionRing(Rect r, string label, string sub, float pct, Color color, bool lit, bool hot)
+        {
+            float n = Mathf.Clamp01(pct);
+            if (n > 0.001f) UiKit.Arc(Ring(r, -6f), n, new Color(color.r, color.g, color.b, lit ? 0.95f : 0.7f), 5f);
+            else UiKit.Arc(Ring(r, -6f), 1f, new Color(1f, 1f, 1f, 0.07f), 5f);
+
+            UiKit.Pill(r, hot ? new Color(color.r, color.g, color.b, 0.12f) : new Color(0.039f, 0.067f, 0.14f, 0.85f),
+                lit ? new Color(color.r, color.g, color.b, 0.65f) : new Color(Violet.r, Violet.g, Violet.b, 0.26f));
+            if (hot) UiKit.Glow(Cx(r.center.x, r.center.y, r.width * 1.9f, r.height * 1.9f),
+                new Color(color.r, color.g, color.b, 0.16f));
+
+            Txt(Label(21, lit ? color : InkText, TextAnchor.MiddleCenter), R(r.x, r.y + 10f, r.width, 28f), label,
+                lit ? color : InkText);
+            Txt(Label(14, lit ? new Color(color.r, color.g, color.b, 0.9f) : Dimc, TextAnchor.MiddleCenter),
+                R(r.x, r.y + 40f, r.width, 20f), sub, lit ? new Color(color.r, color.g, color.b, 0.9f) : Dimc);
+        }
+
+        static Rect Ring(Rect r, float d) => new Rect(r.x + d, r.y + d, r.width - d * 2f, r.height - d * 2f);
+
+        // ---------------------------------------------------------------- 公告 / 提示 / 吐司
+
+        void DrawAnnounce(GameRoot root, float w, float top)
+        {
+            if (string.IsNullOrEmpty(root.AnnounceTitle)) return;
+            float age = Time.unscaledTime - root.AnnounceAt;
+            float dur = Mathf.Max(0.2f, root.AnnounceDur);
+            if (age > dur) return;
+
+            float fadeIn = Mathf.Clamp01(age / 0.22f);
+            float fadeOut = Mathf.Clamp01((dur - age) / 0.3f);
+            float k = Mathf.Min(fadeIn, fadeOut);
+            float slide = (1f - fadeIn) * 14f;
+
+            var col = root.AnnounceAlert ? Rose : Paper;
+            var subCol = root.AnnounceAlert ? Gold : Teal;
+
+            var tmp = Label(46, col, TextAnchor.MiddleCenter);
+            float tw = Mathf.Min(tmp.CalcSize(new GUIContent(root.AnnounceTitle)).x + 90f, w - 120f);
+            float y = root.AnnounceBottom ? RefH - 300f : RefH * 0.36f;
+            var box = Cx(w * 0.5f, y + slide, tw, string.IsNullOrEmpty(root.AnnounceSub) ? 74f : 112f);
+
+            UiKit.Pill(box, new Color(0.016f, 0.024f, 0.059f, 0.55f * k), new Color(0.63f, 0.71f, 1f, 0.12f * k));
+            Bold(tmp, R(box.x, box.y + 8f, box.width, 56f), root.AnnounceTitle, new Color(col.r, col.g, col.b, k), 2.2f);
+            if (!string.IsNullOrEmpty(root.AnnounceSub))
+                Txt(Label(17, subCol, TextAnchor.MiddleCenter), R(box.x, box.y + 64f, box.width, 26f),
+                    Sp(root.AnnounceSub), new Color(subCol.r, subCol.g, subCol.b, k * 0.95f));
+
+            // 两侧细线
+            float lx = box.x - 20f;
+            if (lx > 20f)
             {
-                GUI.color = new Color(1f, 0.25f, 0.25f, 0.10f + 0.05f * Mathf.Sin(Time.unscaledTime * 3f));
-                GUI.DrawTexture(new Rect(0, 0, w, RefH), _ringTex);
+                UiKit.Line(R(lx - 54f, box.center.y - 1f, 54f, 2f), new Color(Violet.r, Violet.g, Violet.b, 0.28f * k));
+                UiKit.Line(R(box.xMax + 20f, box.center.y - 1f, 54f, 2f), new Color(Violet.r, Violet.g, Violet.b, 0.28f * k));
             }
         }
 
-        float BannerAt(GameRoot r) => r.BannerAt;
-        float HintAt(GameRoot r) => r.HintAt;
-        float ToastAt(GameRoot r) => r.ToastAt;
-
-        void DrawTimed(string text, float at, Rect box, GUIStyle style, Color col, float life)
+        void DrawHintToast(GameRoot root, float w, float bottom)
         {
-            if (string.IsNullOrEmpty(text)) return;
-            float age = Time.unscaledTime - at;
-            if (age > life) return;
-            float a = col.a * Mathf.Clamp01((life - age) / 0.6f);
-            DrawText(style, box, text, new Color(col.r, col.g, col.b, a));
-        }
-
-        void DrawRing(Rect rect, string sub, float fill, Color col, bool ready)
-        {
-            var r = rect;
-            float cx = r.x + r.width * 0.5f, cy = r.y + r.height * 0.5f, rr = r.width * 0.5f;
-            GUI.color = new Color(1f, 1f, 1f, ready ? 0.3f : 0.16f);
-            GUI.DrawTexture(r, _pad);
-            GUI.color = new Color(1f, 1f, 1f, 0.22f);
-            GUI.DrawTexture(new Rect(cx - rr, cy - rr, rr * 2, rr * 2), _ringTex);
-            GUI.color = col;
-            DrawArc(cx, cy, rr - 2, -90f, -90f + 360f * Mathf.Clamp01(fill), 4f);
-            DrawText(_small, new Rect(r.x, cy - 14, r.width, 28), sub, new Color(col.r, col.g, col.b, 0.95f),
-                TextAnchor.MiddleCenter);
-        }
-
-        /// <summary>用一小段扇形贴图近似充能环（IMGUI 没有原生圆弧）。</summary>
-        void DrawArc(float cx, float cy, float radius, float from, float to, float thickness)
-        {
-            int steps = Mathf.Max(2, Mathf.CeilToInt(Mathf.Abs(to - from) / 12f));
-            for (int i = 0; i < steps; i++)
+            float ageH = Time.unscaledTime - root.HintAt;
+            if (!string.IsNullOrEmpty(root.Hint) && ageH < 4.6f)
             {
-                float a = Mathf.Lerp(from, to, (i + 0.5f) / steps);
-                float rad = a * Mathf.Deg2Rad;
-                float x = cx + Mathf.Sin(rad) * radius;
-                float y = cy - Mathf.Cos(rad) * radius;
-                GUI.DrawTexture(new Rect(x - thickness * 0.5f, y - thickness * 0.5f, thickness, thickness),
-                    Texture2D.whiteTexture);
+                float k = Mathf.Min(Mathf.Clamp01(ageH / 0.3f), Mathf.Clamp01((4.6f - ageH) / 0.4f));
+                var st = Label(21, Muted, TextAnchor.MiddleCenter);
+                float tw = Mathf.Min(st.CalcSize(new GUIContent(root.Hint)).x + 60f, w - 100f);
+                var r = Cx(w * 0.5f, RefH - bottom - 372f, tw, 56f);
+                UiKit.Pill(r, new Color(0.027f, 0.043f, 0.10f, 0.6f * k), new Color(0.63f, 0.71f, 1f, 0.13f * k));
+                Txt(st, r, root.Hint, new Color(Muted.r, Muted.g, Muted.b, k));
+            }
+
+            float ageT = Time.unscaledTime - root.ToastAt;
+            if (!string.IsNullOrEmpty(root.Toast) && ageT < 1.9f)
+            {
+                float k = Mathf.Min(Mathf.Clamp01(ageT / 0.2f), Mathf.Clamp01((1.9f - ageT) / 0.3f));
+                var st = Label(22, InkText, TextAnchor.MiddleCenter);
+                float tw = Mathf.Min(st.CalcSize(new GUIContent(root.Toast)).x + 60f, w - 100f);
+                var r = Cx(w * 0.5f, RefH - bottom - 464f, tw, 58f);
+                UiKit.Pill(r, new Color(0.027f, 0.043f, 0.10f, 0.88f * k), new Color(0.63f, 0.71f, 1f, 0.14f * k));
+                Txt(st, r, root.Toast, new Color(InkText.r, InkText.g, InkText.b, k));
             }
         }
 
         // ---------------------------------------------------------------- 暂停
-        void DrawPause(GameRoot root, float w)
-        {
-            GUI.color = new Color(0.02f, 0.03f, 0.07f, 0.82f);
-            GUI.DrawTexture(new Rect(0, 0, w, RefH), Texture2D.whiteTexture);
-            GUI.color = Color.white;
 
-            DrawText(_center, new Rect(0, 300, w, 80), "已暂停", new Color(0.9f, 0.95f, 1f));
+        void DrawPause(GameRoot root, float w, float top, float bottom)
+        {
+            Dim();
+            float cardW = Mathf.Min(680f, w - 80f);
+            float cardH = 960f;
+            var card = Cx(w * 0.5f, RefH * 0.5f, cardW, cardH);
+            UiKit.Panel(card, new Color(0.063f, 0.094f, 0.188f, 0.94f), Line(0.14f), 16f);
+            UiKit.Line(R(card.x + 28f, card.y + 1f, card.width - 56f, 2f), new Color(1f, 1f, 1f, 0.05f));
+
+            float x = card.x + 44f, y = card.y + 40f;
+            Txt(_eyebrow, R(x, y, 400f, 24f), Sp("SYSTEM HOLD"), Dimc);
+            y += 34f;
+            Bold(_h1c, R(x, y, card.width - 88f, 70f), "已暂停", Paper, 2f);
+            y += 74f;
+            Txt(_h2, R(x, y, card.width - 88f, 30f), "引擎待命。深空仍在呼吸。", Dimc);
+            y += 46f;
+
+            // 装配摘要
             var p = root.Player;
             if (p != null)
             {
-                string chips = $"脉冲 LV.{p.Weapons.Pulse.Level}{(p.Weapons.Pulse.Unlocked ? "" : " ·未解锁")}   " +
-                               $"棱镜 LV.{p.Weapons.Prism.Level}{(p.Weapons.Prism.Unlocked ? "" : " ·未解锁")}   " +
-                               $"蜂群 LV.{p.Weapons.Swarm.Level}{(p.Weapons.Swarm.Unlocked ? "" : " ·未解锁")}\n" +
-                               $"护盾 {p.Shields}/{GameConfig.MaxShields}   僚机 {p.DroneCount}/{GameConfig.MaxDrones}   " +
-                               $"力场 {(p.ReflectT > 0f ? Mathf.CeilToInt(p.ReflectT) + "s" : "无")}";
-                DrawText(_small, new Rect(0, 400, w, 90), chips, new Color(0.7f, 0.8f, 0.95f, 0.95f),
-                    TextAnchor.MiddleCenter);
+                var w0 = p.Weapons;
+                string[] chips =
+                {
+                    $"脉冲 LV.{w0.Pulse.Level}",
+                    w0.Prism.Unlocked ? $"棱镜 LV.{w0.Prism.Level}" : "棱镜 未解锁",
+                    w0.Swarm.Unlocked ? $"蜂群 LV.{w0.Swarm.Level}" : "蜂群 未解锁",
+                    $"护盾 {p.Shields}/{GameConfig.MaxShields}",
+                    $"僚机 {p.DroneCount}/{GameConfig.MaxDrones}",
+                    p.ReflectT > 0f ? "力场 生效" : "力场 无",
+                };
+                y = Chips(R(x, y, card.width - 88f, 30f), chips, y);
             }
+            y += 10f;
 
-            ToggleRow(root, 520, "音乐音效", !root.Muted, () => root.ToggleMute());
-            ToggleRow(root, 590, "轻柔特效", root.LowFx, () => root.ToggleLowFx());
-            ToggleRow(root, 660, "高对比敌弹", root.HighContrast, () => root.ToggleHighContrast());
+            // 设置
+            y = SettingRow(root, x, y, card.width - 88f, "音乐与音效", "程序化合成器音轨", !root.Muted, () => root.ToggleMute());
+            y = SettingRow(root, x, y, card.width - 88f, "轻柔特效", "降低闪光与粒子密度", root.LowFx, () => root.ToggleLowFx());
+            y = SettingRow(root, x, y, card.width - 88f, "高对比敌弹", "敌弹加白圈，深空更清楚", root.HighContrast, () => root.ToggleHighContrast());
+            y += 24f;
 
-            float bw = 300;
-            var resumeBtn = new Rect(w * 0.5f - bw * 0.5f, 780, bw, 80);
-            Panel(resumeBtn, new Color(0.16f, 0.62f, 0.56f, 0.9f), new Color(0.42f, 0.98f, 0.90f, 1f));
-            if (GUI.Button(resumeBtn, "继续出击", _btnPrimary)) root.TogglePause();
-            var againBtn = new Rect(w * 0.5f - bw * 0.5f, 880, bw, 72);
-            Panel(againBtn, new Color(0.10f, 0.14f, 0.22f, 0.8f), new Color(0.42f, 0.50f, 0.66f, 0.6f));
-            if (GUI.Button(againBtn, "重新开始", _btn)) root.Restart();
-            DrawText(_small, new Rect(0, 980, w, 34), "难度：F1 巡航 / F2 标准 / F3 深渊（或回开始菜单选）",
-                new Color(0.6f, 0.68f, 0.8f, 0.85f), TextAnchor.MiddleCenter);
+            var resume = R(x, y, card.width - 88f, 100f);
+            UIButtonFrame(resume, true);
+            Txt(_btn, resume, "继续巡航", new Color(0.02f, 0.06f, 0.11f));
+            Txt(_kbd, R(resume.xMax - 66f, resume.y + 40f, 52f, 20f), "ESC", new Color(0.02f, 0.06f, 0.11f, 0.45f));
+            if (GUI.Button(resume, GUIContent.none, _invisible)) root.TogglePause();
+            y += 118f;
+
+            var again = R(x, y, card.width - 88f, 92f);
+            UiKit.Panel(again, new Color(0.047f, 0.075f, 0.149f, 0.65f), Line(0.26f), 6f);
+            Txt(_btn, again, "重新开始", InkText);
+            if (GUI.Button(again, GUIContent.none, _invisible)) root.Restart();
+            y += 110f;
+
+            var quit = R(x, y, card.width - 88f, 52f);
+            Txt(Label(18, Dimc, TextAnchor.MiddleCenter), quit, "返回基地", Dimc);
+            if (GUI.Button(quit, GUIContent.none, _invisible)) root.BackToMenu();
+            y += 56f;
+
+            Txt(Label(14, Dimc, TextAnchor.MiddleCenter), R(x, y, card.width - 88f, 22f),
+                Sp("SPACE 冲刺   ·   SHIFT 精准   ·   X 星爆   ·   M 静音"), new Color(Dimc.r, Dimc.g, Dimc.b, 0.9f));
         }
 
-        void ToggleRow(GameRoot root, float y, string label, bool on, System.Action toggle)
+        float Chips(Rect area, string[] texts, float y)
         {
-            float w = Screen.width / (Screen.height / RefH);
-            var r = new Rect(w * 0.5f - 220, y, 440, 56);
-            if (GUI.Button(r, GUIContent.none, _empty)) toggle();
-            DrawText(_body, new Rect(r.x, r.y + 8, 260, 44), label, new Color(0.85f, 0.9f, 1f, 0.95f));
-            var knob = new Rect(r.xMax - 76, r.y + 12, 60, 32);
-            GUI.color = on ? new Color(0.2f, 0.88f, 0.78f, 0.9f) : new Color(1f, 1f, 1f, 0.18f);
-            GUI.DrawTexture(knob, Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            GUI.DrawTexture(new Rect(on ? knob.xMax - 26 : knob.x + 2, knob.y + 2, 22, 28), Texture2D.whiteTexture);
+            float x = area.x;
+            float h = 34f;
+            for (int i = 0; i < texts.Length; i++)
+            {
+                var st = Label(16, Muted, TextAnchor.MiddleCenter);
+                float tw = st.CalcSize(new GUIContent(texts[i])).x + 28f;
+                if (x + tw > area.xMax) { x = area.x; y += h + 8f; }
+                var r = R(x, y, tw, h);
+                UiKit.Pill(r, new Color(0.41f, 0.96f, 0.86f, 0.05f), Line(0.12f));
+                Txt(st, r, texts[i], Muted);
+                x += tw + 8f;
+            }
+            return y + h + 8f;
+        }
+
+        float SettingRow(GameRoot root, float x, float y, float width, string title, string sub, bool on, System.Action toggle)
+        {
+            var row = R(x, y, width, 92f);
+            Txt(Label(25, InkText, TextAnchor.MiddleLeft), R(row.x, row.y + 12f, row.width - 140f, 30f), title, InkText);
+            Txt(Label(18, Muted, TextAnchor.MiddleLeft), R(row.x, row.y + 44f, row.width - 140f, 24f), sub, new Color(Muted.r, Muted.g, Muted.b, 0.9f));
+
+            var t = R(row.xMax - 100f, row.y + 26f, 84f, 40f);
+            UiKit.Pill(t, on ? new Color(Teal.r, Teal.g, Teal.b, 0.16f) : new Color(0.63f, 0.71f, 1f, 0.08f),
+                on ? new Color(Teal.r, Teal.g, Teal.b, 0.55f) : Line(0.26f));
+            var knob = Cx(on ? t.xMax - 22f : t.x + 22f, t.center.y, 30f, 30f);
+            UiKit.Glow(knob, on ? new Color(Teal.r, Teal.g, Teal.b, 0.35f) : new Color(0f, 0f, 0f, 0f));
+            UiKit.Sprite(knob, UiKit.Disc, on ? Teal : Muted);
+            if (GUI.Button(row, GUIContent.none, _invisible)) toggle();
+            UiKit.Line(R(row.x, row.yMax, row.width, 1f), Line(0.07f));
+            return y + 92f;
         }
 
         // ---------------------------------------------------------------- 结算
-        void DrawDead(GameRoot root, float w)
-        {
-            GUI.color = new Color(0.02f, 0.03f, 0.07f, 0.86f);
-            GUI.DrawTexture(new Rect(0, 0, w, RefH), Texture2D.whiteTexture);
-            GUI.color = Color.white;
 
-            var dir = Director.Instance;
+        void DrawDead(GameRoot root, float w, float top, float bottom)
+        {
+            Dim();
+            float cx = w * 0.5f;
+            float y = top + 150f;
             var s = root.Stats;
-            float t = s.Time;
-            string time = Mathf.FloorToInt(t / 60f).ToString("00") + ":" + Mathf.FloorToInt(t % 60f).ToString("00");
-            string gap = root.Grade >= 4 ? "已是最高档" : $"距上一档还差 {Mathf.RoundToInt(root.NextGradeGap)} 分";
 
-            DrawText(_big, new Rect(0, 220, w, 100), "任务结束 · 评级 " + root.GradeText,
-                new Color(1f, 0.8f, 0.45f));
-            DrawText(_small, new Rect(0, 330, w, 40), gap, new Color(0.7f, 0.8f, 0.95f, 0.9f),
-                TextAnchor.MiddleCenter);
+            Txt(Label(17, Rose, TextAnchor.MiddleCenter), R(cx - 300f, y, 600f, 24f), Sp("RUN TERMINATED"), Rose);
+            y += 40f;
+            Bold(_h1c, R(cx - 300f, y, 600f, 72f), "巡航终止", Paper, 2f);
+            y += 64f;
+            Txt(Label(21, Muted, TextAnchor.MiddleCenter), R(cx - 300f, y, 600f, 30f), "信号消失在裂隙深处。", new Color(Muted.r, Muted.g, Muted.b, 0.9f));
+            y += 56f;
 
-            // 十项统计（与网页版一致）
-            string stats =
-                $"星区 {(dir != null ? dir.Zone : 1)}   击落 {s.Kills}   最高连锁 {s.MaxCombo}   时长 {time}\n" +
-                $"擦弹 {s.Graze}   星爆 {s.Novas}   相位穿越 {s.Phases}   核心破防 {s.Breaks}\n" +
-                $"受创 {s.Hits}   最高倍率 ×{1 + Mathf.Min(GameConfig.ComboMaxMult, s.MaxCombo / GameConfig.ComboStep)}\n" +
-                $"分数 {Mathf.RoundToInt(root.Score)}   最佳 {root.Best}";
-            DrawText(_clear, new Rect(60, 420, w - 120, 300), stats, new Color(0.88f, 0.93f, 1f, 0.95f));
+            // 分数卡
+            var card = Cx(cx, y + 130f, Mathf.Min(700f, w - 80f), 260f);
+            UiKit.Panel(card, new Color(0.027f, 0.043f, 0.10f, 0.55f), Line(0.12f), 16f);
+            UiKit.Glow(Cx(card.center.x, card.y + 10f, card.width * 0.9f, 200f), new Color(Teal.r, Teal.g, Teal.b, 0.08f));
+            Txt(Label(15, Dimc, TextAnchor.MiddleCenter), R(card.x, card.y + 22f, card.width, 22f), Sp("SCORE"), Dimc);
+            GlowText(_title, R(card.x, card.y + 44f, card.width - 160f, 150f),
+                Mathf.RoundToInt(root.Score).ToString("N0"), Paper, Teal, TextAnchor.MiddleCenter);
 
-            float bw = 320;
-            var retryBtn = new Rect(w * 0.5f - bw * 0.5f, 820, bw, 84);
-            Panel(retryBtn, new Color(0.16f, 0.62f, 0.56f, 0.9f), new Color(0.42f, 0.98f, 0.90f, 1f));
-            if (GUI.Button(retryBtn, "再次出击", _btnPrimary)) root.Restart();
-            DrawText(_small, new Rect(0, 940, w, 34), "点击任意处或按 R 重新出击",
-                new Color(0.6f, 0.68f, 0.8f, 0.8f), TextAnchor.MiddleCenter);
-            if (Input.GetMouseButtonDown(0) && Screen.height > 0)
+            // 评级圆章
+            var rank = Cx(card.xMax - 100f, card.y + 112f, 112f, 112f);
+            var rc = root.Grade switch { 4 => Teal, 3 => Violet, 2 => Gold, _ => Muted };
+            UiKit.Pill(rank, new Color(rc.r, rc.g, rc.b, 0.08f), new Color(rc.r, rc.g, rc.b, 0.5f));
+            Bold(Label(54, rc, TextAnchor.MiddleCenter), R(rank.x, rank.y + 22f, rank.width, 60f), root.GradeText, rc, 1.6f);
+            Txt(Label(11, rc, TextAnchor.MiddleCenter), R(rank.x, rank.y + 78f, rank.width, 18f), Sp("RANK"),
+                new Color(rc.r, rc.g, rc.b, 0.7f));
+
+            if (root.Score >= root.Best && root.Score > 0)
+                Txt(Label(17, Gold, TextAnchor.MiddleCenter), R(card.x, card.yMax - 34f, card.width, 24f), "◆ 新纪录 ◆", Gold);
+
+            y = card.yMax + 16f;
+            Txt(Label(16, Dimc, TextAnchor.MiddleCenter), R(cx - 320f, y, 640f, 24f),
+                root.NextGradeGap > 0f ? "距上一档还差 " + Mathf.RoundToInt(root.NextGradeGap) + " 分" : "评级：按得分与最远星区综合判定",
+                Dimc);
+            y += 44f;
+
+            // 十项数据（两列五行）
+            string[,] grid =
             {
-                var mp = Input.mousePosition;
-                // 别跟「再次出击」按钮抢：触屏会同时命中 GUI.Button 和这里，
-                // 一帧里 Restart 两次等于把刚重建的世界再拆一次。
-                float sc = Screen.height / RefH;
-                var btnScreen = new Rect(retryBtn.x * sc, Screen.height - retryBtn.yMax * sc,
-                    retryBtn.width * sc, retryBtn.height * sc);
-                if (mp.y < Screen.height - 60 && !btnScreen.Contains(new Vector2(mp.x, mp.y)))
-                    root.Restart();
+                { "抵达星区", Director.Instance != null ? Director.Instance.Zone.ToString("00") : "01" },
+                { "击落敌机", s.Kills.ToString() },
+                { "最高连锁", s.MaxCombo.ToString() },
+                { "巡航时长", Fmt(s.Time) },
+                { "擦弹", s.Graze.ToString() },
+                { "星爆释放", s.Novas.ToString() },
+                { "相位穿越", s.Phases.ToString() },
+                { "核心破防", s.Breaks.ToString() },
+                { "受创", s.Hits.ToString() },
+                { "最高倍率", "×" + Mathf.Max(1, root.Multiplier) },
+            };
+            float gw = Mathf.Min(700f, w - 80f) * 0.5f - 6f;
+            for (int i = 0; i < 10; i++)
+            {
+                int col = i % 2, row = i / 2;
+                var r = R(cx - gw - 6f + col * (gw + 12f), y + row * 84f, gw, 76f);
+                UiKit.Panel(r, new Color(0.027f, 0.043f, 0.10f, 0.55f), Line(0.09f), 12f);
+                Txt(Label(18, Dimc, TextAnchor.MiddleLeft), R(r.x + 18f, r.y + 8f, r.width - 36f, 24f), grid[i, 0], Dimc);
+                Bold(Label(32, InkText, TextAnchor.MiddleLeft), R(r.x + 18f, r.y + 32f, r.width - 36f, 36f), grid[i, 1], InkText, 1.4f);
             }
+            y += 5 * 84f + 16f;
+
+            if (root.LastClearLines != null && root.LastClearLines.Length > 0)
+            {
+                Txt(Label(16, Dimc, TextAnchor.MiddleCenter), R(cx - 340f, y, 680f, 24f),
+                    string.Join("  ·  ", root.LastClearLines), Dimc);
+                y += 34f;
+            }
+
+            var retry = Cx(cx, y + 60f, Mathf.Min(560f, w - 120f), 100f);
+            UIButtonFrame(retry, true);
+            Txt(_btn, retry, "再次出击", new Color(0.02f, 0.06f, 0.11f));
+            Txt(_kbd, R(retry.xMax - 56f, retry.y + 40f, 44f, 20f), "R", new Color(0.02f, 0.06f, 0.11f, 0.45f));
+            if (GUI.Button(retry, GUIContent.none, _invisible)) root.Restart();
+
+            var menu = Cx(cx, y + 168f, Mathf.Min(560f, w - 120f), 64f);
+            Txt(Label(18, Dimc, TextAnchor.MiddleCenter), menu, "返回基地", Dimc);
+            if (GUI.Button(menu, GUIContent.none, _invisible)) root.BackToMenu();
         }
 
-        /// <summary>
-        /// 半透明面板：一块填充 + 1.5px 描边。比整块白色贴图按 alpha 压出来干净，
-        /// 也更接近网页版的扁平面板观感（原来三档难度是两块死灰的实心板）。
-        /// </summary>
-        void Panel(Rect r, Color fill, Color border)
+        static string Fmt(float sec)
         {
-            const float t = 1.5f;
-            GUI.color = fill;
-            GUI.DrawTexture(r, Texture2D.whiteTexture);
-            GUI.color = border;
-            GUI.DrawTexture(new Rect(r.x, r.y, r.width, t), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(r.x, r.yMax - t, r.width, t), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(r.x, r.y + t, t, r.height - t * 2f), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(r.xMax - t, r.y + t, t, r.height - t * 2f), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            int t = Mathf.Max(0, Mathf.RoundToInt(sec));
+            return (t / 60).ToString("00") + ":" + (t % 60).ToString("00");
         }
 
-        void DrawText(GUIStyle style, Rect r, string text, Color color, TextAnchor anchor = TextAnchor.UpperLeft)
+        // ---------------------------------------------------------------- 通用件
+
+        void Dim()
         {
             var prev = GUI.color;
-            var st = style;
-            if (anchor != TextAnchor.UpperLeft)
-            {
-                st = new GUIStyle(style) { alignment = anchor };
-            }
-            GUI.color = color;
-            GUI.Label(r, text, st);
+            GUI.color = new Color(0.012f, 0.02f, 0.047f, 0.62f);
+            GUI.DrawTexture(R(0, 0, w(), RefH), UiKit.White);
             GUI.color = prev;
         }
+
+        float w() => Screen.height > 0 ? Screen.width / (Screen.height / RefH) : 1080f;
+
+        // 主按钮：渐变填充 + 圆角描边（网页版 .btn--primary）
+        void UIButtonFrame(Rect r, bool primary)
+        {
+            if (primary)
+                UiKit.PanelGrad(r, new Color(0.57f, 0.97f, 0.91f), new Color(0.66f, 0.61f, 1f),
+                    new Color(1f, 1f, 1f, 0.22f), 6f);
+            else
+                UiKit.Panel(r, new Color(0.047f, 0.075f, 0.149f, 0.6f), Line(0.26f), 6f);
+        }
+
+        // 透明按钮样式（只吃输入，不画）
+        GUIStyle _invisible;
     }
 }

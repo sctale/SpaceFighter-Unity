@@ -28,6 +28,9 @@ namespace AuroraRift
         bool _rebuilt;
         bool _laser;
         bool _laserCast;
+        bool _pause;      // 拍暂停页
+        bool _dead;       // 拍结算页
+        bool _forced;
 
         public static void MaybeCreate()
         {
@@ -35,13 +38,17 @@ namespace AuroraRift
             bool shots = Array.IndexOf(args, "-shots") >= 0;
             bool dump = Array.IndexOf(args, "-dump") >= 0;
             bool laser = Array.IndexOf(args, "-laser") >= 0;
-            if (!shots && !dump && !laser) return;
+            bool pause = Array.IndexOf(args, "-pause") >= 0;
+            bool dead = Array.IndexOf(args, "-dead") >= 0;
+            if (!shots && !dump && !laser && !pause && !dead) return;
             var go = new GameObject("DevShots");
             var d = go.AddComponent<DevShots>();
             d._shots = shots;
             d._dump = dump;
             d._rebuild = Array.IndexOf(args, "-rebuild") >= 0;
             d._laser = laser;
+            d._pause = pause;
+            d._dead = dead;
             d._quitAfter = Array.IndexOf(args, "-autoshot") >= 0;
             d._dir = Path.Combine(Directory.GetCurrentDirectory(), "docs", "shots");
             d._tag = Arg(args, "-tag") ?? ("zone" + (Arg(args, "-zone") ?? "1"));
@@ -87,6 +94,22 @@ namespace AuroraRift
                     _laserCast = true;
                     boss.DebugCast(BossMove.LaserSweep);   // 内部再分时发出两条扫射光束
                     Debug.Log("[AURORA-LASER] cast LaserSweep t=" + _clock.ToString("F1"));
+                }
+            }
+
+            // 界面拍图用：强制进暂停页 / 结算页
+            if ((_pause || _dead) && !_forced && _clock > 3.4f)
+            {
+                _forced = true;
+                var g = GameRoot.Instance;
+                if (g != null && g.State == GameState.Playing)
+                {
+                    if (_pause) g.TogglePause();
+                    else
+                    {
+                        var p = g.Player;
+                        if (p != null) { p.Invuln = 0f; p.Shields = 0; p.ReflectT = 0f; p.Hull = 1; p.TakeHit(); }
+                    }
                 }
             }
 

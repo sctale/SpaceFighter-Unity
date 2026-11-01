@@ -32,15 +32,15 @@ namespace AuroraRift
 
         public static GameBootstrap Instance { get; private set; }
 
-        /// <summary>原地重开一局：拆掉旧世界、重建、直接进战斗。</summary>
-        public static void Rebuild()
+        /// <summary>原地重开一局：拆掉旧世界、重建。autoStart=false 时停在开始菜单。</summary>
+        public static void Rebuild(bool autoStart = true)
         {
             var b = Instance;
             if (b == null || b._world == null) return;
             UnityEngine.Object.Destroy(b._world.gameObject);
             SetupCamera();
             b.SetupWorld();
-            if (GameRoot.Instance != null) GameRoot.Instance.StartRun();
+            if (autoStart && GameRoot.Instance != null) GameRoot.Instance.StartRun();
         }
 
         static void SetupCamera()

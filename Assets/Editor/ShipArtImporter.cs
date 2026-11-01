@@ -13,6 +13,22 @@ namespace AuroraRift.EditorTools
         void OnPreprocessTexture()
         {
             string p = assetPath.Replace('\\', '/');
+
+            // 应用图标：同样关压缩，否则桌面图标边缘会糊
+            if (p.Contains("/Icons/"))
+            {
+                var ic = (TextureImporter)assetImporter;
+                ic.textureType = TextureImporterType.Default;
+                ic.alphaIsTransparency = true;
+                ic.mipmapEnabled = false;
+                ic.filterMode = FilterMode.Bilinear;
+                ic.wrapMode = TextureWrapMode.Clamp;
+                ic.textureCompression = TextureImporterCompression.Uncompressed;
+                ic.sRGBTexture = true;
+                ic.maxTextureSize = 1024;
+                return;
+            }
+
             if (!p.Contains("/Resources/Ships/")) return;
 
             var imp = (TextureImporter)assetImporter;

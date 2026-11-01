@@ -456,7 +456,7 @@ namespace AuroraRift
                 CameraShake.Instance?.Shake(0.16f, 0.24f);
                 Impact.Spawn(transform.position, new Color(1f, 0.82f, 0.48f, 0.95f), 0.9f, 0.3f);
                 root?.ClearEnemyBullets(true);
-                root?.ShowBanner("棱镜力场抵消");
+                root?.Announce("FIELD", "棱镜力场 · 抵消一次致命", 1.4f);
                 return;
             }
 
@@ -479,7 +479,8 @@ namespace AuroraRift
             {
                 root.RegisterHullHit();
                 root.ClearEnemyBullets(true);
-                root.ShowBanner(Hull > 0 ? "HULL BREACH · 武器降级" : "SIGNAL LOST");
+                if (Hull > 0) root.Announce("HULL BREACH", "舰体受损 · 武器降级", 1.5f, true);
+                else root.Announce("SIGNAL LOST", "战机信号中断", 1.8f, true);
             }
             CameraShake.Instance?.Shake(0.24f, 0.34f);
             Impact.Spawn(transform.position, new Color(1f, 0.44f, 0.57f, 0.95f), 1.1f, 0.34f);

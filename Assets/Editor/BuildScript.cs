@@ -40,6 +40,7 @@ namespace AuroraRift.EditorTools
             };
             var report = BuildPipeline.BuildPlayer(opts);
             Debug.Log($"[Aurora] EXPORT_RESULT={report.summary.result} errors={report.summary.totalErrors} dir={outDir}");
+            if (report.summary.result == BuildResult.Succeeded) PatchAdaptiveIcon(outDir);
             if (Application.isBatchMode)
                 EditorApplication.Exit(report.summary.result == BuildResult.Succeeded ? 0 : 1);
         }
@@ -77,6 +78,65 @@ namespace AuroraRift.EditorTools
                       $"size={report.summary.totalSize} errors={report.summary.totalErrors} " +
                       $"output={output}");
             return report;
+        }
+
+        /// <summary>应用图标：母图 1024，Unity 自己缩到各密度。</summary>
+        static void ApplyIcons()
+        {
+            var icon = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/Icons/icon_1024.png");
+            if (icon == null)
+            {
+                Debug.LogWarning("[Aurora] 缺少 Assets/Icons/icon_1024.png，跳过图标设置");
+                return;
+            }
+            PlayerSettings.SetIcons(NamedBuildTarget.Android, new[] { icon }, IconKind.Any);
+        }
+
+        /// <summary>
+        /// Unity 只写传统 mipmap 图标；这里补一份 Android 8+ 的自适应图标
+        /// （背景渐变 + 前景菱形环与舰船），避免桌面上被套一层白底。
+        /// </summary>
+        static void PatchAdaptiveIcon(string projectDir)
+        {
+            try
+            {
+                string res = Path.Combine(projectDir, "launcher", "src", "main", "res");
+                if (!Directory.Exists(res))
+                {
+                    Debug.LogWarning("[Aurora] 找不到 launcher res 目录，跳过自适应图标");
+                    return;
+                }
+                string drawable = Path.Combine(res, "drawable-nodpi");
+                string anydpi = Path.Combine(res, "mipmap-anydpi-v26");
+                Directory.CreateDirectory(drawable);
+                Directory.CreateDirectory(anydpi);
+
+                CopyIcon("icon_bg_1024.png", Path.Combine(drawable, "ic_launcher_bg.png"));
+                CopyIcon("icon_fg_1024.png", Path.Combine(drawable, "ic_launcher_fg.png"));
+
+                string nl = System.Environment.NewLine;
+                string xml =
+                    "<?xml version=\"1.0\" encoding=\"utf-8\"?>" + nl +
+                    "<adaptive-icon xmlns:android=\"http://schemas.android.com/apk/res/android\">" + nl +
+                    "    <background android:drawable=\"@drawable/ic_launcher_bg\" />" + nl +
+                    "    <foreground android:drawable=\"@drawable/ic_launcher_fg\" />" + nl +
+                    "</adaptive-icon>" + nl;
+                // Unity 的 launcher 清单引用的是 @mipmap/app_icon，所以文件名要对齐
+                File.WriteAllText(Path.Combine(anydpi, "app_icon.xml"), xml);
+                File.WriteAllText(Path.Combine(anydpi, "ic_launcher.xml"), xml);
+                File.WriteAllText(Path.Combine(anydpi, "ic_launcher_round.xml"), xml);
+                Debug.Log("[Aurora] 自适应图标已写入 launcher/src/main/res/mipmap-anydpi-v26");
+            }
+            catch (System.Exception e)
+            {
+                Debug.LogWarning("[Aurora] 自适应图标写入失败：" + e.Message);
+            }
+        }
+
+        static void CopyIcon(string name, string dst)
+        {
+            string src = Path.Combine("Assets", "Icons", name);
+            if (File.Exists(src)) File.Copy(src, dst, true);
         }
 
         static void EnsureScene()
@@ -150,8 +210,8 @@ namespace AuroraRift.EditorTools
         {
             PlayerSettings.companyName = "sctale";
             PlayerSettings.productName = "Aurora Rift";
-            PlayerSettings.bundleVersion = "0.16.0";
-            PlayerSettings.Android.bundleVersionCode = 16;
+            PlayerSettings.bundleVersion = "0.17.0";
+            PlayerSettings.Android.bundleVersionCode = 17;
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.sctale.spacefighter");
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
             PlayerSettings.allowedAutorotateToPortrait = true;
@@ -167,6 +227,7 @@ namespace AuroraRift.EditorTools
             PlayerSettings.stripEngineCode = false;
             PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
             PlayerSettings.colorSpace = ColorSpace.Linear;
+            ApplyIcons();
             EditorUserBuildSettings.buildAppBundle = false;
         }
 

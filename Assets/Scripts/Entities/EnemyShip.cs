@@ -24,6 +24,7 @@ namespace AuroraRift
 
         SpriteRenderer _sr, _flash, _ring, _armor;
         float _age, _fireTimer, _phase, _charge, _flashT;
+        float _summonT = 3.2f;
         Vector2 _anchor;
         bool _entered;
         bool _dead;
@@ -132,7 +133,7 @@ namespace AuroraRift
 
             _phase = Random.value * 10f;
             _anchor = transform.position;
-            _fireTimer = Def.Fire == FireMode.None ? float.MaxValue : NextInterval(diff, zone);
+            _fireTimer = Def.Fire == FireMode.None ? float.MaxValue : Random.Range(0.9f, 1.6f);
         }
 
         /// <summary>密度档位 + 精英 + 难度共同决定的射击间隔。</summary>
@@ -175,7 +176,7 @@ namespace AuroraRift
         {
             int tier = Mathf.Min(3, (_zone > 0 ? _zone - 1 : 0) / 5);
             Vector2 p = transform.position;
-            float speed = Def.Speed * _hpMul * (1f + tier * GameConfig.EnemySpeedPerTier);
+            float speed = Def.Speed * (1f + tier * 0.14f);   // 原版 speedMul = 1 + tier×0.14（与血量倍率无关）
             float amp = Def.Amp;
 
             switch (Def.Move)
@@ -229,7 +230,24 @@ namespace AuroraRift
 
         void Fire(float dt)
         {
+            // 原版：只有进画面、且在 80% 高度以上才开火；航母另算召唤计时
+            float myY = transform.position.y;
+            bool inBand = myY > -0.6f * GameView.HalfHeight && myY < GameView.HalfHeight - 20f * GameConfig.Px;
+
+            if (Kind == EnemyKind.Carrier && inBand)
+            {
+                _summonT -= dt;
+                if (_summonT <= 0f)
+                {
+                    _summonT = Random.Range(2.6f, 3.6f);
+                    var d = Director.Instance;
+                    if (d != null && d.AliveEnemies < 38)
+                        d.SpawnShardling(transform.position + new Vector3(Random.Range(-0.4f, 0.4f), -0.5f));
+                }
+            }
+
             if (Def.Fire == FireMode.None) return;
+            if (!inBand) return;
             var player = GameRoot.Instance?.Player;
             if (player == null || !player.Alive) return;
 
@@ -251,61 +269,100 @@ namespace AuroraRift
 
         void DoFire(PlayerShip player)
         {
-            float bs = Director.Instance != null ? Director.Instance.EnemyBulletSpeed : 4.2f;
-            Vector2 from = transform.position;
-            Vector2 dir = ((Vector2)player.transform.position - from).normalized;
-            var tint = new Color(1f, 0.45f, 0.55f);
-            int tier = Director.Instance != null ? Director.Instance.DensityTier : 1;
-            float r = 5f * GameConfig.Px;
+            var diff = Director.Instance != null ? Director.Instance.Diff : Difficulties.Standard;
+            int tier = Director.Instance != null ? Director.Instance.DensityTier : 0;
+            // 原版 entities.js:1392：弹速 = min(300, 150×(1+tier×0.14)) × 难度系数
+            float spPx = Mathf.Min(300f, 150f * (1f + tier * 0.14f)) * diff.BulletSpeed;
+            float sp = spPx * GameConfig.Px;
+            Vector2 from = (Vector2)transform.position + Vector2.down * (Def.Radius * 0.4f);
+            Vector2 toPlayer = (Vector2)player.transform.position - (Vector2)transform.position;
+            float aim = Mathf.Atan2(toPlayer.y, toPlayer.x) * Mathf.Rad2Deg;
+            var tint = Def.Tint;
 
-            void SpawnAt(Vector2 pos, Vector2 vel, Color c, float radius, string kind = "orb") =>
-                FireOne(pos, vel, c, radius, kind);
+            void Add(float deg, float speed, string kind, float rPx)
+            {
+                float a = deg * Mathf.Deg2Rad;
+                FireOne(from, new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * speed,
+                    EnemyTint(kind, tint), rPx * GameConfig.Px, kind, 9f);
+            }
+            void Fan(int n, float spreadDeg, float speed, string kind, float rPx)
+            {
+                for (int i = 0; i < n; i++) Add(aim + (i - (n - 1) * 0.5f) * spreadDeg, speed, kind, rPx);
+            }
 
             switch (Def.Fire)
             {
                 case FireMode.Aimed:
-                    SpawnAt(from, dir * bs, tint, r, "orb");
-                    for (int i = 1; i < tier; i++)
-                        SpawnAt(from, Rot(dir, (i * 6f) * (i % 2 == 1 ? 1f : -1f)) * bs, tint, r * 0.9f, "orb");
+                    Add(aim, sp, "orb", 6f);
+                    if (Elite) Fan(3, 11.5f, sp * 0.95f, "shard", 6f);
                     break;
                 case FireMode.Fan:
-                    for (int i = -2 - (tier - 1); i <= 2 + (tier - 1); i++)
-                        SpawnAt(from, Rot(dir, i * 9f) * bs, tint, r, "orb");
+                    Fan(Elite ? 5 : 3, 10.3f, sp * 0.95f, "shard", 6f);
                     break;
                 case FireMode.Ring:
-                    for (int i = 0; i < (Elite ? 14 : 10); i++)
-                        SpawnAt(from, Rot(Vector2.down, i * 36f) * bs * 0.85f, new Color(1f, 0.8f, 0.4f), r * 1.1f, "orb");
+                {
+                    int n = Elite ? 14 : 10;
+                    float off = _age * 0.5f * Mathf.Rad2Deg;
+                    for (int i = 0; i < n; i++) Add(off + i * 360f / n, sp * 0.72f, "orb", 6f);
                     break;
+                }
                 case FireMode.Spread:
-                    for (int i = -3 - (tier - 1); i <= 3 + (tier - 1); i++)
-                        SpawnAt(from, Rot(dir, i * 8f) * bs, tint, r * 0.9f, "orb");
+                    Add(aim - 18.3f, sp * 0.8f, "orb", 6f);
+                    Add(aim + 18.3f, sp * 0.8f, "orb", 6f);
                     break;
                 case FireMode.Heavy:
-                    SpawnAt(from, dir * bs * 0.8f, new Color(1f, 0.85f, 0.45f), 9f * GameConfig.Px, "heavy");
-                    SpawnAt(from, Rot(dir, 8f) * bs * 0.8f, new Color(1f, 0.85f, 0.45f), 9f * GameConfig.Px, "heavy");
+                    if (Elite)
+                    {
+                        Add(aim - 12.6f, sp * 0.42f, "plasma", 13f);
+                        Add(aim + 12.6f, sp * 0.42f, "plasma", 13f);
+                    }
+                    Fan(3, 14.9f, sp * 0.55f, "heavy", 10f);
                     break;
                 case FireMode.Needle:
-                    SpawnAt(from, dir * bs * 1.6f, new Color(0.4f, 1f, 0.9f), 4f * GameConfig.Px, "needle");
+                    Fan(Elite ? 5 : 3, 4.3f, 330f * GameConfig.Px, "needle", 5f);
                     break;
                 case FireMode.Mines:
-                    for (int i = 0; i < 3; i++)
-                        SpawnAt(from, new Vector2(Random.Range(-0.6f, 0.6f), -bs * 0.45f),
-                            new Color(1f, 0.85f, 0.35f), 8f * GameConfig.Px, "mine");
+                {
+                    int n = Elite ? 4 : 3;
+                    for (int i = 0; i < n; i++)
+                    {
+                        float a = (aim + (i - (n - 1) * 0.5f) * 31.5f) * Mathf.Deg2Rad;
+                        var b = BulletPool.Instance.Spawn(Team.Enemy, from,
+                            new Vector2(Mathf.Cos(a), Mathf.Sin(a)) * (105f * GameConfig.Px),
+                            1f, 9f * GameConfig.Px, EnemyTint("mine", tint), "mine", Random.Range(1.8f, 2.4f));
+                        b.SplitOnExpire = 10;
+                    }
                     break;
+                }
                 case FireMode.Wavefire:
-                    for (int i = 0; i < 2; i++) SpawnAt(from, Rot(dir, (i == 0 ? -14f : 14f)) * bs * 1.15f, tint, r * 0.85f, "orb");
+                    Add(aim - 20.6f, sp * 0.82f, "wave", 7f);
+                    Add(aim + 20.6f, sp * 0.82f, "wave", 7f);
+                    Add(aim, sp * 1.1f, "needle", 5f);
                     break;
                 case FireMode.Carrier:
-                    SpawnAt(from, dir * bs * 0.9f, tint, r * 0.9f, "orb");
-                    Director.Instance?.SpawnShardling(from + new Vector2(Random.Range(-0.4f, 0.4f), -0.5f));
+                    Add(aim - 9.2f, sp * 0.6f, "orb", 7f);
+                    Add(aim + 9.2f, sp * 0.6f, "orb", 7f);
                     break;
             }
         }
 
-        void FireOne(Vector2 pos, Vector2 vel, Color tint, float radius, string kind)
+        /// <summary>原版弹体配色：针弹青、水雷金、重弹橙、碎片跟机体同色。</summary>
+        static Color EnemyTint(string kind, Color fallback)
         {
-            var p = BulletPool.Instance.Spawn(Team.Enemy, pos, vel, 1f, radius, tint, kind, 7f);
-            p.Life = 7f;
+            switch (kind)
+            {
+                case "needle": return new Color(0.55f, 0.98f, 0.95f);
+                case "mine": return new Color(1f, 0.85f, 0.35f);
+                case "heavy":
+                case "plasma": return new Color(1f, 0.86f, 0.55f);
+                default: return fallback;
+            }
+        }
+
+        void FireOne(Vector2 pos, Vector2 vel, Color tint, float radius, string kind, float life = 9f)
+        {
+            var p = BulletPool.Instance.Spawn(Team.Enemy, pos, vel, 1f, radius, tint, kind, life);
+            p.Life = life;
         }
 
         static Vector2 Rot(Vector2 v, float deg)
