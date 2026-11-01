@@ -150,14 +150,21 @@ namespace AuroraRift.EditorTools
         {
             PlayerSettings.companyName = "sctale";
             PlayerSettings.productName = "Aurora Rift";
-            PlayerSettings.bundleVersion = "0.15.0";
-            PlayerSettings.Android.bundleVersionCode = 15;
+            PlayerSettings.bundleVersion = "0.16.0";
+            PlayerSettings.Android.bundleVersionCode = 16;
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.sctale.spacefighter");
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
             PlayerSettings.allowedAutorotateToPortrait = true;
             PlayerSettings.allowedAutorotateToLandscapeLeft = false;
             PlayerSettings.allowedAutorotateToLandscapeRight = false;
             PlayerSettings.Android.minSdkVersion = AndroidSdkVersions.AndroidApiLevel25;
+            // Strip Engine Code 会把原生 MonoBehaviour(class 115) 从包里剥掉：
+            // 之后每次 AddComponent / ScriptableObject.CreateInstance 都报
+            // "Could not produce class with ID 115"，IMGUI 每帧画字要建一次
+            // RuntimeTextSettings，30 秒能刷 2.5 万条，顺带让 GUI.DoSetSkin 抛 NRE。
+            // link.xml 保住 UnityEngine.MonoScript 也无效（实测），只能按 Unity
+            // 的提示关掉引擎裁剪；代价是包体大约 +8MB，换界面不再抖异常。
+            PlayerSettings.stripEngineCode = false;
             PlayerSettings.Android.targetSdkVersion = AndroidSdkVersions.AndroidApiLevelAuto;
             PlayerSettings.colorSpace = ColorSpace.Linear;
             EditorUserBuildSettings.buildAppBundle = false;

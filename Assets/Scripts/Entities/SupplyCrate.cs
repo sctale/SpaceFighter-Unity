@@ -2,9 +2,12 @@ using UnityEngine;
 
 namespace AuroraRift
 {
-    public enum CrateKind { WeaponLevel, Drone, Shield, Charge }
+    /// <summary>
+    /// 补给箱：与网页版同一套 9 类掉落（升级/护盾/僚机/棱镜线/蜂群线/力场/命/宝石/换线）。
+    /// 拾取半径 30px，缓慢下落；换线箱是青色，专门治「一把武器骑到底」。
+    /// </summary>
+    public enum CrateKind { WeaponLevel, Shield, Drone, Prism, Swarm, Reflect, Life, Gem, Swap, Gems }
 
-    /// <summary>补给箱：缓慢下落，碰到玩家即拾取。保底逻辑在 Director（连续 3 次没出缺失项则第 4 次强制）。</summary>
     public class SupplyCrate : MonoBehaviour
     {
         public CrateKind Kind;
@@ -13,26 +16,42 @@ namespace AuroraRift
         SpriteRenderer _sr, _halo;
         float _age;
 
+        static string ArtName(CrateKind k) => k switch
+        {
+            CrateKind.WeaponLevel => "crate_weapon",
+            CrateKind.Drone => "crate_drone",
+            CrateKind.Shield => "crate_shield",
+            CrateKind.Prism => "crate_prism",
+            CrateKind.Swarm => "crate_swarm",
+            CrateKind.Reflect => "crate_reflect",
+            CrateKind.Life => "crate_life",
+            CrateKind.Gem => "crate_gem",
+            CrateKind.Swap => "crate_swap",
+            _ => "crate_gem",
+        };
+
+        static Color TintOf(CrateKind k) => k switch
+        {
+            CrateKind.WeaponLevel => GameConfig.Hex("FFD27A"),
+            CrateKind.Drone => GameConfig.Hex("8FA4C9"),
+            CrateKind.Shield => GameConfig.Hex("9B8CFF"),
+            CrateKind.Prism => GameConfig.Hex("FF6F91"),
+            CrateKind.Swarm => GameConfig.Hex("FFC24B"),
+            CrateKind.Reflect => GameConfig.Hex("FFD27A"),
+            CrateKind.Life => GameConfig.Hex("FF6F91"),
+            CrateKind.Gem => GameConfig.Hex("FFE9B0"),
+            CrateKind.Swap => GameConfig.Hex("69F5DC"),
+            _ => GameConfig.Hex("FFE9B0"),
+        };
+
         public void Setup(CrateKind kind)
         {
             Kind = kind;
-            string art = kind switch
-            {
-                CrateKind.WeaponLevel => "crate_weapon",
-                CrateKind.Drone => "crate_drone",
-                CrateKind.Shield => "crate_shield",
-                _ => "crate_charge",
-            };
-            Color c = kind switch
-            {
-                CrateKind.WeaponLevel => GameConfig.Hex("FFD27A"),
-                CrateKind.Drone => GameConfig.Hex("8FA4C9"),
-                CrateKind.Shield => GameConfig.Hex("69F5DC"),
-                _ => GameConfig.Hex("FF9AB4"),
-            };
+            var c = TintOf(kind);
 
             _sr = gameObject.AddComponent<SpriteRenderer>();
-            var sp = ShipArt.Get(art, 0.40f);
+            float height = kind == CrateKind.Gem ? 0.30f : 0.40f;
+            var sp = ShipArt.Get(ArtName(kind), height);
             if (sp != null)
             {
                 _sr.sprite = sp;
@@ -49,10 +68,10 @@ namespace AuroraRift
             var haloGo = new GameObject("Halo");
             haloGo.transform.SetParent(transform, false);
             _halo = haloGo.AddComponent<SpriteRenderer>();
-            _halo.sprite = ShipArt.Get("bullet_aura_ring", 1.05f) ?? RuntimeSprites.Ring(64);
+            _halo.sprite = ShipArt.Get("bullet_glow_soft", 1.1f) ?? RuntimeSprites.Ring(64);
             _halo.sortingOrder = 11;
-            _halo.transform.localScale = Vector3.one * 1.35f;
-            _halo.color = new Color(c.r, c.g, c.b, 0.35f);
+            _halo.transform.localScale = Vector3.one;
+            _halo.color = new Color(c.r, c.g, c.b, 0.30f);
         }
 
         void Update()
@@ -62,39 +81,63 @@ namespace AuroraRift
             float dt = Time.deltaTime;
             _age += dt;
             transform.position += Vector3.down * (Speed * dt);
-            transform.Rotate(0f, 0f, 90f * dt);
-            _halo.transform.localScale = Vector3.one * (1.35f + Mathf.Sin(_age * 4f) * 0.10f);
+            if (Kind != CrateKind.Gem) transform.Rotate(0f, 0f, 42f * dt);
+            _halo.transform.localScale = Vector3.one * (0.9f + Mathf.Sin(_age * 4f) * 0.08f);
 
             var p = root.Player;
             if (p != null && p.Alive &&
-                Vector2.Distance(transform.position, p.transform.position) < 0.65f)
+                Vector2.Distance(transform.position, p.transform.position) < 30f * GameConfig.Px)
             {
                 Collect(p);
                 Destroy(gameObject);
                 return;
             }
 
-            if (transform.position.y < -GameConfig.OrthoSizeMin - 0.8f) Destroy(gameObject);
+            if (transform.position.y < GameView.DespawnY) Destroy(gameObject);
         }
 
         void Collect(PlayerShip p)
         {
+            var root = GameRoot.Instance;
             switch (Kind)
             {
-                case CrateKind.WeaponLevel:
-                    p.Weapons.GrantLevel();
+                case CrateKind.Gem:
+                    root?.AddScore(25 * (root.Multiplier));
+                    p.AddNova(GameConfig.NovaOnGem);
                     break;
-                case CrateKind.Drone:
-                    p.RestoreDrone();
+                case CrateKind.WeaponLevel:
+                    if (!p.Weapons.GrantLevel()) root?.AddScore(800);
+                    root?.ShowToast("POWER LV." + p.Weapons.Active.Level);
                     break;
                 case CrateKind.Shield:
-                    p.Shields = Mathf.Min(GameConfig.MaxShields, p.Shields + 1);
+                    if (p.Shields < GameConfig.MaxShields) { p.Shields++; root?.ShowToast("SHIELD " + p.Shields + "/3"); }
+                    else root?.AddScore(500);
                     break;
-                case CrateKind.Charge:
-                    p.Weapons.RefillAll();
+                case CrateKind.Drone:
+                    if (p.DroneCount < GameConfig.MaxDrones) { p.RestoreDrone(); root?.ShowToast("僚机归队"); }
+                    else root?.AddScore(300);
+                    break;
+                case CrateKind.Prism:
+                    p.Weapons.GrantLine("prism");
+                    root?.ShowToast("棱镜线解锁/升级");
+                    break;
+                case CrateKind.Swarm:
+                    p.Weapons.GrantLine("swarm");
+                    root?.ShowToast("蜂群线解锁/升级");
+                    break;
+                case CrateKind.Reflect:
+                    p.GrantReflect();
+                    root?.ShowToast("PRISM FIELD 8s");
+                    break;
+                case CrateKind.Life:
+                    p.Hull = Mathf.Min(5, p.Hull + 1);
+                    root?.ShowToast("舰体 +1");
+                    break;
+                case CrateKind.Swap:
+                    bool ok = p.Weapons.SwapToBest(30f);
+                    root?.ShowToast(ok ? "武器切换 · " + GameConfig.Line(p.Weapons.ActiveId).Label : "三线回充");
                     break;
             }
-            p.AddNovaRaw(6f);
             AudioDirector.Instance?.PlayPickup();
             Director.Instance?.OnCrateCollected(Kind);
         }

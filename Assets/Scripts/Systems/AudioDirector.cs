@@ -72,7 +72,7 @@ namespace AuroraRift
 
         public void PlayShot()
         {
-            if (_shotCooldown > 0f) return;
+            if (_muted || _shotCooldown > 0f) return;
             _shotCooldown = 0.05f;
             _sfx.PlayOneShot(_shot, 0.28f);
         }
@@ -81,6 +81,28 @@ namespace AuroraRift
         public void PlayExplode() => _sfx.PlayOneShot(_explode, 0.5f);
         public void PlayPickup() => _sfx.PlayOneShot(_pickup, 0.7f);
         public void PlayWarn() => _sfx.PlayOneShot(_warn, 0.6f);
+
+        /// <summary>冲刺：短促上扬音（复用警告音的高音版）。</summary>
+        public void PlayDash()
+        {
+            if (_sfx == null) return;
+            _sfx.PlayOneShot(_shot, 0.55f);
+        }
+
+        /// <summary>换线：清脆的一下 UI 音（复用拾取音）。</summary>
+        public void PlaySwitch()
+        {
+            if (_sfx == null) return;
+            _sfx.PlayOneShot(_pickup, 0.5f);
+        }
+
+        bool _muted;
+
+        public void SetMuted(bool muted)
+        {
+            _muted = muted;
+            if (_sfx != null) _sfx.mute = muted;
+        }
 
         // ---- 波形合成 ----
 

@@ -52,40 +52,57 @@ namespace AuroraRift
             _ => 0.5f,
         };
 
-        // 三台 Boss（按星区档位）各自的 3 阶段序列；每阶段 2 招交替，保证 22 招全部登场
+        // 三台 Boss 各自的 3 阶段序列：热身 4 招、二阶段 6 招、三阶段 6 招，按序循环（可背板）。
         static readonly BossMove[][][] Sequences =
         {
-            // Boss A：环爆型（zone 1-3）
+            // Gatekeeper：环爆型
             new[]
             {
-                new[] { BossMove.Ring, BossMove.Fan },
-                new[] { BossMove.RingDouble, BossMove.AimedBurst },
-                new[] { BossMove.Spiral, BossMove.FinalBurst },
+                new[] { BossMove.Ring, BossMove.Fan, BossMove.Aimed, BossMove.RingDouble },
+                new[] { BossMove.Spiral, BossMove.WallGap, BossMove.AimedBurst, BossMove.FanWide,
+                        BossMove.RingDouble, BossMove.LaserSweep },
+                new[] { BossMove.SpiralDual, BossMove.Converge, BossMove.Crossfire, BossMove.BulletRain,
+                        BossMove.WallRotate, BossMove.FinalBurst },
             },
-            // Boss B：弹墙/激光型（zone 4-6）
+            // Weaver：弹墙/激光型
             new[]
             {
-                new[] { BossMove.WallGap, BossMove.LaserSweep },
-                new[] { BossMove.WallRotate, BossMove.LaserCross },
-                new[] { BossMove.SpiralDual, BossMove.Converge },
+                new[] { BossMove.WallGap, BossMove.LaserSweep, BossMove.Aimed, BossMove.Fan },
+                new[] { BossMove.WallRotate, BossMove.LaserCross, BossMove.Spiral, BossMove.AimedRing,
+                        BossMove.FanWide, BossMove.Teleport },
+                new[] { BossMove.Converge, BossMove.SpiralReverse, BossMove.Crossfire, BossMove.BulletRain,
+                        BossMove.MineField, BossMove.FinalBurst },
             },
-            // Boss C：混合型（zone 7+）
+            // Helios：混合/布雷型
             new[]
             {
-                new[] { BossMove.AimedRing, BossMove.Mines },
-                new[] { BossMove.Teleport, BossMove.MineField },
-                new[] { BossMove.Dash, BossMove.Crossfire },
+                new[] { BossMove.AimedRing, BossMove.Mines, BossMove.Ring, BossMove.Dash },
+                new[] { BossMove.Teleport, BossMove.MineField, BossMove.SpiralDual, BossMove.Fan,
+                        BossMove.AimedBurst, BossMove.WallGap },
+                new[] { BossMove.Crossfire, BossMove.Converge, BossMove.LaserCross, BossMove.SpiralReverse,
+                        BossMove.BulletRain, BossMove.FinalBurst },
             },
         };
 
-        public static BossMove Pick(int bossTier, int phase, int index)
+        public static BossMove Pick(int bossIndex, int phase, int index)
         {
-            bossTier = Mathf.Clamp(bossTier, 0, Sequences.Length - 1);
+            bossIndex = Mathf.Clamp(bossIndex, 0, Sequences.Length - 1);
             phase = Mathf.Clamp(phase, 0, 2);
-            var seq = Sequences[bossTier][phase];
+            var seq = Sequences[bossIndex][phase];
             return seq[index % seq.Length];
         }
 
-        public static int TierForZone(int zone) => zone <= 3 ? 0 : zone <= 6 ? 1 : 2;
+        /// <summary>每台 Boss 各阶段的招式数（4 / 6 / 6）。</summary>
+        public static int SequenceLength(int bossIndex, int phase) =>
+            Sequences[Mathf.Clamp(bossIndex, 0, 2)][Mathf.Clamp(phase, 0, 2)].Length;
+
+        /// <summary>三台 Boss 的基础血量（原版 entities.js:1730/1740/1750）。</summary>
+        public static readonly float[] BaseHp = { 400f, 380f, 440f };
+
+        /// <summary>原版按 (sector-1)%3 轮换三台 Boss，而不是按星区段固定。</summary>
+        public static int BossForZone(int zone) => ((zone - 1) % 3 + 3) % 3;
+
+        /// <summary>弹幕强度档（每 5 个星区一档，最多 3 档）。</summary>
+        public static int TierForZone(int zone) => Mathf.Min(3, (zone - 1) / 5);
     }
 }

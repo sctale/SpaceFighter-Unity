@@ -413,7 +413,8 @@ def draw_player(cv, pal):
 # ---------------------------------------------------------------- 僚机
 def draw_drone(cv, kind):
     cv.name = "drone_" + kind
-    pal = {"seeker": PAL["gold"], "cannon": PAL["rose"], "support": PAL["cyan"]}[kind]
+    pal = {"seeker": PAL["gold"], "cannon": PAL["rose"], "support": PAL["cyan"],
+               "swarm": PAL["violet"]}[kind]
     main, light, deep, dark = pal["main"], pal["light"], pal["deep"], pal["dark"]
     neutral_hi = hx("DCE9F5")
     neutral = hx("7E93AD")
@@ -480,6 +481,22 @@ def draw_drone(cv, kind):
         cv.ellipse((0, -0.48), (0.12, 0.06), (0.03, 0.02, 0.02))
         cv.ellipse((0, -0.48), (0.065, 0.03), mix(WHITE, main, 0.4))
 
+    elif kind == "swarm":
+        # 蜂群巢：小六边形 + 三个发射口
+        sil = [(0, -0.86), (0.52, -0.5), (0.62, 0.1), (0.30, 0.72), (-0.30, 0.72),
+               (-0.62, 0.1), (-0.52, -0.5)]
+        cv.glow(sil, main, 0.10, 0.38)
+        cv.paint(cv.mask_poly(sil), INK, 1.0)
+        cv.plate(sil, mix(neutral_hi, main, 0.30), mix(deep, body_dark, 0.4),
+                 stroke=mix(light, WHITE, 0.25), stroke_w=0.014,
+                 bevel_hi=WHITE, bevel_lo=deep, bevel_w=0.02)
+        for dx in (-0.26, 0.0, 0.26):
+            cv.plate([(dx - 0.08, -0.10), (dx + 0.08, -0.10), (dx + 0.06, 0.34), (dx - 0.06, 0.34)],
+                     mix(dark, main, 0.3), (0.02, 0.02, 0.03),
+                     stroke=mix(light, main, 0.3), stroke_w=0.010, bevel_w=0.010, track=False)
+            cv.ellipse((dx, 0.32), (0.045, 0.03), mix(WHITE, main, 0.3))
+        cv.ellipse((0, -0.42), (0.13, 0.11), mix(dark, main, 0.35), stroke=light, stroke_w=0.016)
+        cv.dot((0, -0.42), 0.05, WHITE)
     else:  # support
         sil = [(0, -0.72), (0.32, -0.55), (0.90, -0.22), (0.72, 0.10), (0.30, 0.20),
                (0.16, 0.55), (0, 0.85), (-0.16, 0.55), (-0.30, 0.20), (-0.72, 0.10),
@@ -1647,7 +1664,9 @@ def draw_crate(cv, kind):
     cv.name = "crate_" + kind
     pal = {
         "weapon": PAL["gold"], "drone": PAL["blue"],
-        "shield": PAL["cyan"], "charge": PAL["pink"],
+        "shield": PAL["violet"], "charge": PAL["pink"],
+        "prism": PAL["rose"], "swarm": PAL["gold"], "reflect": PAL["gold"],
+        "life": PAL["rose"], "gem": PAL["gold"], "swap": PAL["cyan"],
     }[kind]
     main, light, deep, dark = pal["main"], pal["light"], pal["deep"], pal["dark"]
     box = [(-0.62, -0.80), (0.62, -0.80), (0.80, -0.60), (0.80, 0.62),
@@ -1677,10 +1696,47 @@ def draw_crate(cv, kind):
         cv.plate(hexp, mix(WHITE, main, 0.25), mix(main, deep, 0.5),
                  stroke=light, stroke_w=0.02, bevel_w=0.02, track=False)
         cv.ellipse((0, 0), (0.08, 0.08), WHITE)
-    else:
+    elif kind == "charge":
         # 闪电
         cv.line([(0.10, -0.26), (-0.12, 0.02), (0.04, 0.02), (-0.08, 0.28)],
                 mix(WHITE, main, 0.15), 0.085, 0.95)
+    elif kind in ("prism", "reflect"):
+        # 棱镜：贯穿长矛 / 力场：同心泡
+        if kind == "prism":
+            cv.plate([(0, -0.30), (0.13, 0), (0, 0.30), (-0.13, 0)],
+                     mix(WHITE, main, 0.2), mix(main, deep, 0.5),
+                     stroke=light, stroke_w=0.02, bevel_w=0.02, track=False)
+            cv.dot((0, 0), 0.05, WHITE)
+        else:
+            cv.ellipse((0, 0), (0.26, 0.26), None, stroke=mix(WHITE, main, 0.2), stroke_w=0.025)
+            cv.ellipse((0, 0), (0.15, 0.15), None, stroke=light, stroke_w=0.018)
+            cv.dot((0, 0), 0.05, WHITE)
+    elif kind == "swarm":
+        # 蜂群：三枚小弹头
+        for dx, dy in ((-0.14, 0.08), (0.14, 0.08), (0, -0.14)):
+            cv.plate([(dx, dy - 0.12), (dx + 0.07, dy + 0.08), (dx, dy + 0.13), (dx - 0.07, dy + 0.08)],
+                     mix(WHITE, main, 0.25), mix(main, deep, 0.5),
+                     stroke=light, stroke_w=0.014, bevel_w=0.012, track=False)
+    elif kind == "life":
+        # 命：十字
+        cv.plate([(-0.07, -0.26), (0.07, -0.26), (0.07, 0.26), (-0.07, 0.26)],
+                 mix(WHITE, main, 0.2), mix(main, deep, 0.5), stroke=light,
+                 stroke_w=0.016, bevel_w=0.014, track=False)
+        cv.plate([(-0.26, -0.07), (0.26, -0.07), (0.26, 0.07), (-0.26, 0.07)],
+                 mix(WHITE, main, 0.2), mix(main, deep, 0.5), stroke=light,
+                 stroke_w=0.016, bevel_w=0.014, track=False)
+    elif kind == "gem":
+        cv.glow(cv.mask_poly([(0, -0.34), (0.24, 0), (0, 0.34), (-0.24, 0)]), main, 0.06, 0.5)
+        cv.plate([(0, -0.34), (0.24, 0), (0, 0.34), (-0.24, 0)],
+                 mix(WHITE, main, 0.3), mix(main, deep, 0.55),
+                 stroke=mix(WHITE, light, 0.4), stroke_w=0.018,
+                 bevel_hi=WHITE, bevel_lo=deep, bevel_w=0.02, track=False)
+        cv.line([(0, -0.34), (0, 0.34)], mix(WHITE, light, 0.4), 0.012, 0.6)
+        cv.line([(-0.24, 0), (0.24, 0)], mix(WHITE, light, 0.4), 0.012, 0.6)
+    elif kind == "swap":
+        # 换线：两条反向箭头
+        cv.line([(-0.20, -0.12), (0.16, -0.12), (0.06, -0.24)], mix(WHITE, main, 0.2), 0.075, 0.95)
+        cv.line([(0.20, 0.12), (-0.16, 0.12), (-0.06, 0.24)], mix(WHITE, main, 0.2), 0.075, 0.95)
     # 四角铆钉
     for sx in (-1, 1):
         for sy in (-1, 1):
@@ -1711,7 +1767,7 @@ def main():
             cv.save()
 
     if want("drone"):
-        for k in ("seeker", "cannon", "support"):
+        for k in ("seeker", "cannon", "support", "swarm"):
             cv = Cv(192, 4)
             draw_drone(cv, k)
             cv.save()
@@ -1752,7 +1808,8 @@ def main():
             cv.save()
 
     if want("crate"):
-        for k in ("weapon", "drone", "shield", "charge"):
+        for k in ("weapon", "drone", "shield", "charge", "prism", "swarm",
+                  "reflect", "life", "gem", "swap"):
             cv = Cv(192, 4)
             draw_crate(cv, k)
             cv.save()

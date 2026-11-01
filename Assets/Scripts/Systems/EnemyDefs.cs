@@ -26,7 +26,7 @@ namespace AuroraRift
 
     public static class EnemyDefs
     {
-        const float Px = 0.025f; // 1 原版像素 = 0.025 世界单位
+        const float Px = GameConfig.Px; // 1 原版像素 = 10/540 世界单位（网页版画布 W=540）
 
         public static readonly EnemyDef[] All =
         {

@@ -31,19 +31,47 @@ namespace AuroraRift
             }
         }
 
-        public Projectile Spawn(Team team, Vector2 pos, Vector2 vel, float damage, float radius, Color tint)
+        public Projectile Spawn(Team team, Vector2 pos, Vector2 vel, float damage, float radius, Color tint,
+                                string kind = null, float life = 0f)
         {
             Projectile p = _free.Count > 0 ? _free.Pop() : NewBullet();
             p.gameObject.SetActive(true);
             p.transform.SetPositionAndRotation(pos, Quaternion.identity);
-            p.Life = GameConfig.BulletLifetime;
-            p.Homing = false;
-            p.HomingTarget = null;
-            p.Piercing = false;
             p.name = team == Team.Player ? "PBullet" : "EBullet";
-            p.Init(team, vel, damage, radius, tint);
+            p.Init(team, vel, damage, radius, tint, kind, life);
             _active.Add(p);
+            if (team == Team.Enemy) TrimEnemyBullets();
             return p;
+        }
+
+        /// <summary>原版场上敌弹上限 420：超了就删离玩家最远的那颗，而不是让帧率崩掉。</summary>
+        void TrimEnemyBullets()
+        {
+            Vector2 me = GameRoot.Instance != null && GameRoot.Instance.Player != null
+                ? (Vector2)GameRoot.Instance.Player.transform.position : Vector2.zero;
+            int guard = 0;
+            while (CountEnemy() > GameConfig.MaxEnemyBullets && guard++ < 64)
+            {
+                int worst = -1;
+                float worstD = -1f;
+                for (int i = 0; i < _active.Count; i++)
+                {
+                    var b = _active[i];
+                    if (b == null || b.Team != Team.Enemy) continue;
+                    float d = (b.transform.position - (Vector3)me).sqrMagnitude;
+                    if (d > worstD) { worstD = d; worst = i; }
+                }
+                if (worst < 0) break;
+                Release(_active[worst]);
+            }
+        }
+
+        int CountEnemy()
+        {
+            int n = 0;
+            for (int i = 0; i < _active.Count; i++)
+                if (_active[i] != null && _active[i].Team == Team.Enemy) n++;
+            return n;
         }
 
         public void Release(Projectile p)

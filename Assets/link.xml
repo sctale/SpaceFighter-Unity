@@ -1,0 +1,21 @@
+<linker>
+  <!--
+    安卓 IL2CPP 包开了 Strip Engine Code 后，两个原生类会被剥掉，
+    但运行期其实一直在用（v0.16.0 真机 logcat 实测）：
+
+    1) class 115 = UnityEngine.MonoScript
+       每次 GameObject.AddComponent 都报
+       "Could not produce class with ID 115 / Try disabling 'Strip Engine Code'"，
+       启动阶段刷了上千条。
+
+    2) UnityEngine.RuntimeTextSettings（IMGUIModule）
+       IMGUI 每次画字都要读它的 defaultTextSettings；拿不到就
+       GUI.DoSetSkin 每帧抛 NullReferenceException，HUD 整层不画。
+
+    只保住这两个模块，不动 Strip Engine Code，包体不受影响。
+  -->
+  <assembly fullname="UnityEngine.CoreModule">
+    <type fullname="UnityEngine.MonoScript" preserve="all" />
+  </assembly>
+  <assembly fullname="UnityEngine.IMGUIModule" preserve="all" />
+</linker>

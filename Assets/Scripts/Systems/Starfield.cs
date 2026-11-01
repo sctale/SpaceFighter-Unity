@@ -58,7 +58,7 @@ namespace AuroraRift
                 go.transform.localScale = Vector3.one * size;
                 go.transform.position = new Vector3(
                     Random.Range(-GameConfig.WorldWidth, GameConfig.WorldWidth) * 0.75f,
-                    Random.Range(-GameConfig.OrthoSizeMin, GameConfig.OrthoSizeMin),
+                    Random.Range(-GameView.HalfHeight, GameView.HalfHeight),
                     0f);
                 _stars[i] = new Star
                 {
@@ -87,9 +87,9 @@ namespace AuroraRift
                 var s = _stars[i];
                 var p = s.Tr.position;
                 p.y -= s.Speed * dt;
-                if (p.y < -GameConfig.OrthoSizeMin - 0.5f)
+                if (p.y < -GameView.HalfHeight - 0.5f)
                 {
-                    p.y = GameConfig.OrthoSizeMin + 0.5f;
+                    p.y = GameView.HalfHeight + 0.5f;
                     p.x = Random.Range(-GameConfig.WorldWidth, GameConfig.WorldWidth) * 0.75f;
                 }
                 s.Tr.position = p;

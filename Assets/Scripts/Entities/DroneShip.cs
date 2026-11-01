@@ -3,125 +3,163 @@ using UnityEngine;
 namespace AuroraRift
 {
     /// <summary>
-    /// 僚机：停在左翼/右翼/尾部的固定挂载点，跟随带阻尼而不绕圈；
-    /// 弹药形态随当前武器线。玩家被击中时僚机爆炸失联（原版规则）。
+    /// 僚机：停在左翼/右翼/尾部的固定挂载点，跟随带阻尼而不绕圈。
+    /// 四种型号（gunner 火力 / lance 双管 / aegis 点防御 / swarm 微型追踪），
+    /// 但弹药形态跟着主机当前武器线走——换线时整个编队的弹道一起变。
     /// </summary>
-    public enum DroneType { Seeker, Cannon, Support }
-
     public class DroneShip : MonoBehaviour
     {
-        public int Slot;                 // 0=左翼 1=右翼 2=尾部
-        public DroneType Type;
+        public int Slot;
+        public string Kind = "gunner";
         public float FireCooldown;
 
         PlayerShip _owner;
-        SpriteRenderer _sr, _glow;
+        SpriteRenderer _sr;
         Vector2 _vel;
+        float _pdTimer;
 
-        static readonly Vector2[] Offsets =
+        public static Vector2 SlotOffset(int index, int count)
         {
-            new Vector2(-0.85f, -0.05f),
-            new Vector2(0.85f, -0.05f),
-            new Vector2(0f, -0.9f),
-        };
+            // 原版 droneSlot()：两架分列左右翼尖，第三架挂尾
+            if (count <= 1) return new Vector2(-64, 8);
+            if (count == 2) return index == 0 ? new Vector2(-64, 8) : new Vector2(64, 8);
+            if (index == 0) return new Vector2(-68, 2);
+            if (index == 1) return new Vector2(68, 2);
+            return new Vector2(0, 48);
+        }
 
-        public void Bind(PlayerShip owner, int slot)
+        public void Bind(PlayerShip owner, int slot, string kind)
         {
             _owner = owner;
             Slot = slot;
-            Type = slot == 0 ? DroneType.Seeker : slot == 1 ? DroneType.Cannon : DroneType.Support;
-            _sr = gameObject.AddComponent<SpriteRenderer>();
-            string art = Type switch
+            Kind = string.IsNullOrEmpty(kind) ? "gunner" : kind;
+
+            string art = Kind switch
             {
-                DroneType.Seeker => "drone_seeker",
-                DroneType.Cannon => "drone_cannon",
-                _ => "drone_support",
+                "lance" => "drone_cannon",
+                "aegis" => "drone_support",
+                "swarm" => "drone_swarm",
+                _ => "drone_seeker",
             };
-            _sr.sprite = ShipArt.Get(art, 0.58f) ?? RuntimeSprites.Disc(32);
+            _sr = gameObject.AddComponent<SpriteRenderer>();
+            _sr.sprite = ShipArt.Get(art, 0.44f) ?? RuntimeSprites.Disc(32);
             _sr.color = Color.white;
             _sr.sortingOrder = 9;
             transform.localScale = Vector3.one;
 
-            var glowGo = new GameObject("Glow");
-            glowGo.transform.SetParent(transform, false);
-            _glow = glowGo.AddComponent<SpriteRenderer>();
-            _glow.sprite = ShipArt.Get("bullet_glow_soft", 0.95f) ?? RuntimeSprites.Disc(16);
-            _glow.sortingOrder = 8;
-            _glow.transform.localScale = Vector3.one * 0.9f;
-
-            FireCooldown = 0.25f + slot * 0.08f;
+            FireCooldown = Random.Range(0.15f, 0.5f);
         }
 
         void Update()
         {
             if (_owner == null) { Destroy(gameObject); return; }
             var root = GameRoot.Instance;
-            if (root != null && root.State != GameState.Playing) return;
             float dt = Time.deltaTime;
 
-            // 阻尼跟随：临界阻尼弹簧，避免绕着母舰转圈
-            Vector2 target = (Vector2)_owner.transform.position + Offsets[Slot];
+            int count = _owner != null ? _owner.DroneCount : 1;
+            Vector2 slot = SlotOffset(Slot, Mathf.Max(1, count));
+            float halfW = GameView.HalfWidth;
+            float tx = Mathf.Clamp(_owner.transform.position.x + slot.x * GameConfig.Px,
+                                   -halfW + 18 * GameConfig.Px, halfW - 18 * GameConfig.Px);
+            float ty = _owner.transform.position.y - slot.y * GameConfig.Px;   // 原版 y 向下为正
             Vector2 cur = transform.position;
-            Vector2 desired = (target - cur) * 7.5f;
-            _vel = Vector2.Lerp(_vel, desired, 1f - Mathf.Exp(-12f * dt));
-            transform.position = cur + _vel * dt;
+            Vector2 want = new Vector2(tx, ty);
+            // damp(a,b,13,dt)：临界阻尼，绕圈是不可能的
+            transform.position = Vector2.Lerp(cur, want, 1f - Mathf.Exp(-13f * dt));
 
-            var line = GameConfig.Line(_owner.Weapons.ActiveId);
-            if (_glow != null)
-                _glow.color = new Color(line.Tint.r, line.Tint.g, line.Tint.b,
-                    0.16f + Mathf.Sin(Time.time * 4.2f + Slot) * 0.04f);
-
-            // 小幅侧倾，跟随机动而不是整圈乱转
-            if (_vel.sqrMagnitude > 0.0004f)
-            {
-                float ang = Mathf.Clamp(Mathf.Atan2(-_vel.x, _vel.y) * Mathf.Rad2Deg, -26f, 26f);
-                transform.rotation = Quaternion.Slerp(transform.rotation,
-                    Quaternion.Euler(0f, 0f, ang), 1f - Mathf.Exp(-8f * dt));
-            }
+            // 菜单/暂停时也要摆位：以前这里整段 return，僚机就停在世界原点，
+            // 开始界面中间凭空多出一架飞机（真机截图实测到的现象）。
+            if (root != null && root.State != GameState.Playing) return;
 
             FireCooldown -= dt;
-            if (FireCooldown <= 0f)
-            {
-                Fire();
-                FireCooldown = 0.34f + Slot * 0.05f;
-            }
+            if (FireCooldown > 0f) return;
+            Fire();
         }
 
         void Fire()
         {
             var line = GameConfig.Line(_owner.Weapons.ActiveId);
-            var target = Director.Instance != null ? Director.Instance.NearestEnemy(transform.position) : null;
-            Vector2 dir = target != null
-                ? ((Vector2)target.position - (Vector2)transform.position).normalized
-                : Vector2.up;
+            Vector2 pos = transform.position;
 
-            switch (Type)
+            if (Kind == "aegis")
             {
-                case DroneType.Seeker:   // 弧线寻的
+                FireCooldown = GameConfig.AegisPdInterval;
+                PointDefense();
+                return;
+            }
+
+            if (_owner.Weapons.ActiveId == "swarm" || Kind == "swarm")
+            {
+                FireCooldown = Kind == "gunner" ? 0.86f : 1.02f;
+                int n = Kind == "lance" ? 2 : 1;
+                for (int k = 0; k < n; k++)
                 {
-                    var p = BulletPool.Instance.Spawn(Team.Player, transform.position,
-                        dir * line.Speed * 0.75f, 0.9f, 0.06f, new Color(1f, 0.85f, 0.55f));
+                    var p = BulletPool.Instance.Spawn(Team.Player, pos - new Vector2(0f, 5f * GameConfig.Px),
+                        new Vector2((k - (n - 1) * 0.5f) * 140f * GameConfig.Px, 700f * GameConfig.Px),
+                        Mathf.Max(1, Mathf.Round(2 * _owner.Weapons.DamageMul())),
+                        4f * GameConfig.Px, line.Tint, "micro", 2.1f);
                     p.Homing = true;
-                    p.HomingTarget = target;
-                    break;
+                    p.TurnRate = 4.4f;
+                    p.HomingDelay = 0.12f;
+                    p.HomingTarget = Director.Instance != null ? Director.Instance.NearestEnemy(pos) : null;
                 }
-                case DroneType.Cannon:   // 低速重击
+                return;
+            }
+
+            if (_owner.Weapons.ActiveId == "prism")
+            {
+                FireCooldown = Kind == "lance" ? 0.82f : 1.05f;
+                var b = BulletPool.Instance.Spawn(Team.Player, pos + new Vector2(0f, 9f * GameConfig.Px),
+                    Vector2.up * (600f * GameConfig.Px),
+                    Mathf.Max(1, Mathf.Round((Kind == "lance" ? 4 : 3) * _owner.Weapons.DamageMul())),
+                    6f * GameConfig.Px, line.Tint, "lance", 2.4f);
+                b.Piercing = true;
+                b.PierceLeft = Kind == "lance" ? 2 : 1;
+                return;
+            }
+
+            FireCooldown = Kind == "gunner" ? 0.34f : 0.5f;
+            BulletPool.Instance.Spawn(Team.Player, pos + new Vector2(0f, 7f * GameConfig.Px),
+                Vector2.up * (1180f * GameConfig.Px),
+                Mathf.Max(1, Mathf.Round(1 * _owner.Weapons.DamageMul())),
+                4f * GameConfig.Px, line.Tint, "drone", 1.9f);
+            if (Kind == "lance")
+            {
+                BulletPool.Instance.Spawn(Team.Player, pos + new Vector2(-5f * GameConfig.Px, 4f * GameConfig.Px),
+                    new Vector2(-60f * GameConfig.Px, 1140f * GameConfig.Px),
+                    Mathf.Max(1, Mathf.Round(1 * _owner.Weapons.DamageMul())),
+                    4f * GameConfig.Px, line.Tint, "drone", 1.9f);
+            }
+        }
+
+        /// <summary>aegis 的点防御圈：每 0.7 秒清掉圈内最多 4 颗敌弹，并回充星爆。</summary>
+        void PointDefense()
+        {
+            var pool = BulletPool.Instance;
+            if (pool == null) return;
+            int cleared = 0;
+            for (int i = pool.Active.Count - 1; i >= 0 && cleared < GameConfig.AegisPdClearCount; i--)
+            {
+                var b = pool.Active[i];
+                if (b == null || b.Team != Team.Enemy) continue;
+                if (Vector2.Distance(b.transform.position, transform.position) <= GameConfig.AegisPdRadius)
                 {
-                    BulletPool.Instance.Spawn(Team.Player, transform.position,
-                        dir * line.Speed * 0.55f, 2.2f, 0.11f, new Color(0.95f, 0.6f, 0.75f));
-                    break;
+                    pool.Release(b);
+                    cleared++;
+                    _owner.AddNova(GameConfig.NovaOnPointDefense);
                 }
-                default:                 // 高速细弹
-                {
-                    BulletPool.Instance.Spawn(Team.Player, transform.position,
-                        dir * line.Speed * 1.15f, 0.5f, 0.05f, new Color(0.8f, 0.95f, 1f));
-                    break;
-                }
+            }
+            if (cleared > 0)
+            {
+                var line = GameConfig.Line(_owner.Weapons.ActiveId);
+                Impact.Spawn(transform.position, new Color(line.Tint.r, line.Tint.g, line.Tint.b, 0.5f),
+                    GameConfig.AegisPdRadius * 2f, 0.22f);
             }
         }
 
         public void Explode()
         {
+            Impact.Spawn(transform.position, new Color(1f, 0.82f, 0.48f, 0.9f), 0.6f, 0.28f);
             Destroy(gameObject);
         }
     }

@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace AuroraRift
@@ -13,12 +14,16 @@ namespace AuroraRift
         public float BreakGauge;
         public BossMove CurrentMove { get; private set; }
         public float TelegraphLeft => _telegraph;
-        public bool Critical => Hp <= MaxHp * 0.12f;
+        public bool Critical => Hp <= MaxHp * GameConfig.BossCriticalFrac;
+        public bool Dying => _dead;
+        public float BreakMax => _breakMax;
+        public float BulletSpeed => _bulletSpeed;
         public int Phase { get; private set; }
         /// <summary>判定半径：与 4.08 世界单位的机体视觉半径（≈1.88）对齐，取略小值。</summary>
         public float HitRadius => 1.55f;
 
-        int _tier, _phase, _index;
+        int _tier, _phase, _index, _zone, _bossIndex;
+        float _breakMax = 100f, _bulletSpeed = 2.8f, _mercy = -1f, _idleTimer;
         float _timer, _telegraph = -1f, _stun;
         Vector2 _anchor;
         SpriteRenderer _sr, _aura, _ring, _core, _flash;
@@ -33,16 +38,27 @@ namespace AuroraRift
         public void Setup(int zone, Difficulty diff)
         {
             _diff = diff;
+            _zone = zone;
             _tier = BossMoves.TierForZone(zone);
-            MaxHp = Hp = (220f + zone * 60f) * diff.BossHp;
-            _anchor = new Vector2(0f, GameConfig.OrthoSizeMin * 0.45f);
-            transform.position = new Vector3(_anchor.x, GameConfig.OrthoSizeMin + 1.5f, 0f);
+            _bossIndex = BossMoves.BossForZone(zone);
+            // 原版：def.hp × (1 + min(3.4, (s-1)×0.70)) × 难度
+            MaxHp = Hp = GameConfig.BossBaseHp(_bossIndex) * GameConfig.BossHpScale(zone) * diff.BossHp;
+            _breakMax = Mathf.Max(GameConfig.BossBreakFloor, MaxHp * GameConfig.BossBreakFracOfMaxHp);
+            _bulletSpeed = (GameConfig.BossBulletSpeedBase + _tier * GameConfig.BossBulletSpeedPerTier)
+                           * diff.BossBullet * GameConfig.Px;
+            // 原版 boss.targetY = max(H*0.27, 252px)（距顶），入场点在屏外一格。
+            // 必须用实时视口高度，写死 OrthoSizeMin 会让 20:9 长屏的 Boss 悬在画面中间。
+            float topPx = Mathf.Max(2f * GameView.HalfHeight / GameConfig.Px * 0.27f, 252f);
+            _anchor = new Vector2(0f, GameView.FromTopPx(topPx));
+            transform.position = new Vector3(_anchor.x, GameView.HalfHeight + 1.5f, 0f);
+            _pending.Clear();
+            BossLaser.ClearAll();
 
-            _kind = _tier == 0 ? "gatekeeper" : _tier == 1 ? "weaver" : "helios";
-            _accent = _tier == 0 ? GameConfig.Hex("FF6F91")
-                    : _tier == 1 ? GameConfig.Hex("A597FF")
+            _kind = _bossIndex == 0 ? "gatekeeper" : _bossIndex == 1 ? "weaver" : "helios";
+            _accent = _bossIndex == 0 ? GameConfig.Hex("FF6F91")
+                    : _bossIndex == 1 ? GameConfig.Hex("A597FF")
                     : GameConfig.Hex("FFD27A");
-            _ringSpeed = _tier == 0 ? 18f : _tier == 1 ? -32f : 14f;
+            _ringSpeed = _bossIndex == 0 ? 18f : _bossIndex == 1 ? -32f : 14f;
 
             _sr = gameObject.AddComponent<SpriteRenderer>();
             var body = ShipArt.Get("boss_" + _kind, 4.08f);
@@ -108,6 +124,7 @@ namespace AuroraRift
             if (root == null || root.State != GameState.Playing) return;
             float dt = Time.deltaTime;
             TickVisuals(dt);
+            TickPending(dt);
 
             Vector2 p = transform.position;
             if (p.y > _anchor.y)
@@ -123,16 +140,30 @@ namespace AuroraRift
                 return;
             }
 
-            int wantPhase = Hp / MaxHp > 0.66f ? 0 : Hp / MaxHp > 0.33f ? 1 : 2;
+            float frac = Hp / Mathf.Max(1f, MaxHp);
+            int wantPhase = frac > GameConfig.BossPhaseHigh ? 0
+                          : frac > GameConfig.BossPhaseLow ? 1 : 2;
             if (wantPhase != _phase)
             {
                 _phase = wantPhase;
                 _index = 0;
-                ClearBullets();
+                GameRoot.Instance?.ClearEnemyBullets(true);
+                // 原版换阶段是一口明确的喘息：清弹、清光束、停掉未发完的分时回调
+                _pending.Clear();
+                BossLaser.ClearAll();
                 TriggerShockwave();
                 GameRoot.Instance?.ShowBanner($"核心进入第 {_phase + 1} 阶段");
-                _timer = 1.2f;
+                // mercy：换阶段后给一段明确的喘息窗口
+                _mercy = GameConfig.BossMercyWindow;
+                _timer = GameConfig.BossMercyWindow;
                 _telegraph = -1f;
+                if (GameRoot.Instance != null) GameRoot.Instance.Player?.GrantInvulnBossPhase();
+                return;
+            }
+
+            if (_mercy > 0f)
+            {
+                _mercy -= dt;
                 return;
             }
 
@@ -144,9 +175,10 @@ namespace AuroraRift
             }
 
             _timer -= dt;
+            IdleFire(dt);
             if (_timer <= 0f)
             {
-                CurrentMove = BossMoves.Pick(_tier, _phase, _index++);
+                CurrentMove = BossMoves.Pick(_bossIndex, _phase, _index++);
                 if (Critical) { Execute(CurrentMove); _timer = Cooldown(); }
                 else
                 {
@@ -157,6 +189,60 @@ namespace AuroraRift
         }
 
         float Cooldown() => (Critical ? 0.85f : 1.35f) * (2f - _diff.BossBullet);
+
+        // ------------------------------------------------------------ 招式内的分时发射
+        /// <summary>
+        /// 原版一招里是分时刻发好几段的（this.at(a, 0.1, ...) / at(a, 1.25, ...)），
+        /// 之前 Unity 版把整招压成同一帧，光束和补刀弹幕糊在一起，读不出招。
+        /// 这里补一个最小的分时队列。
+        /// </summary>
+        class Pending { public float at; public float t; public System.Action act; public bool done; }
+        readonly List<Pending> _pending = new List<Pending>();
+        float _idleCd;
+
+        void At(float at, System.Action act) => _pending.Add(new Pending { at = at, act = act });
+
+        void TickPending(float dt)
+        {
+            for (int i = _pending.Count - 1; i >= 0; i--)
+            {
+                var e = _pending[i];
+                e.t += dt;
+                if (e.t >= e.at) { _pending.RemoveAt(i); if (!e.done) { e.done = true; e.act?.Invoke(); } }
+            }
+        }
+
+        /// <summary>
+        /// 原版 entities.js:2029 idleFire：招式间隙机体不会停火。
+        /// 二阶段起 0.95s 一枚针，三阶段 0.66s 两枚（±0.11rad 夹射）。
+        /// </summary>
+        void IdleFire(float dt)
+        {
+            if (_mercy > 0f || _phase < 1) return;
+            _idleCd -= dt;
+            if (_idleCd > 0f) return;
+            var player = GameRoot.Instance?.Player;
+            Vector2 from = transform.position;
+            Vector2 aim = player != null
+                ? ((Vector2)player.transform.position - from).normalized
+                : Vector2.down;
+            int n = _phase == 2 ? 2 : 1;
+            var needle = new Color(0.55f, 0.95f, 1f);
+            for (int i = 0; i < n; i++)
+            {
+                float d = (i - (n - 1) * 0.5f) * 0.22f * Mathf.Rad2Deg;
+                Shot(from, Rot(aim, d) * _bulletSpeed * 0.92f, needle, 5f * GameConfig.Px);
+            }
+            _idleCd = _phase == 2 ? 0.66f : 0.95f;
+        }
+
+        /// <summary>分时回调里不能沿用出招瞬间的坐标，发射时刻重新取一次。</summary>
+        Vector2 AimDir()
+        {
+            var player = GameRoot.Instance?.Player;
+            Vector2 from = transform.position;
+            return player != null ? ((Vector2)player.transform.position - from).normalized : Vector2.down;
+        }
 
         /// <summary>视觉层：旋转环、呼吸光环、核心脉动、受击/破防/临界叠色。本体贴图不染色。</summary>
         void TickVisuals(float dt)
@@ -208,6 +294,9 @@ namespace AuroraRift
             }
         }
 
+        /// <summary>开发期：-laser 直接指定一招，用来给新加的实体（光束）拍验收图。</summary>
+        public void DebugCast(BossMove m) => Execute(m);
+
         void Execute(BossMove m)
         {
             var player = GameRoot.Instance?.Player;
@@ -215,7 +304,7 @@ namespace AuroraRift
             Vector2 aim = player != null
                 ? ((Vector2)player.transform.position - from).normalized
                 : Vector2.down;
-            float sp = 3.6f * _diff.BossBullet;
+            float sp = _bulletSpeed;
             var hot = new Color(1f, 0.72f, 0.3f);
             var cold = new Color(1f, 0.55f, 0.5f);
             var pink = new Color(1f, 0.4f, 0.75f);
@@ -252,16 +341,27 @@ namespace AuroraRift
                         Shot(from + new Vector2(i * 0.7f, 0f), Rot(Vector2.down, 18f) * sp, cold, 0.1f);
                     break;
                 case BossMove.LaserSweep:
-                    for (int i = 0; i < 16; i++)
-                        Shot(from, Rot(Vector2.down, -28f + i * 3.5f) * sp * 1.5f, cyan, 0.06f);
+                {
+                    // 原版 sweep：两条错开 1.15s 的扫射光束（一顺一逆），最后补一发扇形
+                    float ang = Mathf.Atan2(aim.y, aim.x);
+                    At(0.10f, () => { BossLaser.Spawn(transform.position, ang - 0.55f, 0.9f, 0.9f, 16f, 0.9f, _accent, this); AudioDirector.Instance?.PlayWarn(); });
+                    At(1.25f, () => { BossLaser.Spawn(transform.position, ang + 0.55f, 0.8f, 0.85f, 14f, -0.95f, _accent, this); AudioDirector.Instance?.PlayWarn(); });
+                    At(2.15f, () => Fan(transform.position, AimDir(), _phase >= 1 ? 5 : 3, 13.8f, sp, cold));
                     break;
+                }
                 case BossMove.LaserCross:
-                    for (int i = 0; i < 12; i++)
+                {
+                    // 原版 cross：随机基角的十字四分光束，1s 后补一圈环弹收尾
+                    float base0 = Random.value * 0.6f;
+                    At(0.15f, () =>
                     {
-                        Shot(from, Rot(Vector2.up, i * 30f) * sp * 1.2f, cyan, 0.06f);
-                        Shot(from, Rot(Vector2.down, i * 30f) * sp * 1.2f, cyan, 0.06f);
-                    }
+                        for (int i = 0; i < 4; i++)
+                            BossLaser.Spawn(transform.position, base0 + i * Mathf.PI * 0.5f, 0.95f, 0.62f, 12f, 0f, _accent, this);
+                        AudioDirector.Instance?.PlayWarn();
+                    });
+                    At(1.05f, () => Ring(transform.position, _phase >= 1 ? 14 : 10, sp * 0.7f, cold));
                     break;
+                }
                 case BossMove.Mines:
                     for (int i = 0; i < 4; i++)
                         Shot(from + new Vector2(Random.Range(-2f, 2f), 0f), new Vector2(0f, -sp * 0.4f), hot, 0.13f);
@@ -294,7 +394,7 @@ namespace AuroraRift
                     for (int i = 0; i < 14; i++)
                     {
                         Vector2 at = new Vector2(Random.Range(-GameConfig.PlayHalfWidth, GameConfig.PlayHalfWidth),
-                                                 GameConfig.OrthoSizeMin + 0.5f);
+                                                 GameView.HalfHeight + 0.5f);
                         Shot(at, Vector2.down * sp * 1.1f, hot, 0.09f);
                     }
                     break;
@@ -368,14 +468,16 @@ namespace AuroraRift
         {
             if (_dead) return;
             _flashT = 0.07f;
-            float mul = _stun > 0f ? 1.35f : 1f;
+            float mul = _stun > 0f ? GameConfig.BossBreakDamageMul : 1f;
             Hp -= dmg * mul;
-            BreakGauge = Mathf.Min(100f, BreakGauge + dmg * 1.6f);
-            if (BreakGauge >= 100f && _stun <= 0f)
+            BreakGauge = Mathf.Min(_breakMax, BreakGauge + dmg);
+            if (BreakGauge >= _breakMax && _stun <= 0f)
             {
                 BreakGauge = 0f;
-                _stun = 1.2f;
-                ClearBullets();
+                _stun = GameConfig.BossBreakStun;
+                GameRoot.Instance?.ClearEnemyBullets(false);
+                GameRoot.Instance?.RegisterBreak();
+                GameRoot.Instance?.ShowBanner("核心破防 · 伤害窗口");
             }
             if (Hp <= 0f) Die();
         }
@@ -391,25 +493,32 @@ namespace AuroraRift
         void Die()
         {
             _dead = true;
+            _pending.Clear();
+            BossLaser.ClearAll();
             var root = GameRoot.Instance;
             if (root != null)
             {
-                float elapsed = Mathf.Max(0f, Time.time - _spawnTime);
-                int timeBonus = Mathf.RoundToInt(Mathf.Max(400f, 2400f - elapsed * 40f));
-                bool noHit = root.Stats.Hits == _hitsAtSpawn;
-                int noHitBonus = noHit ? 1500 : 0;
-                int grazeBonus = Mathf.Min(1500, root.Stats.Graze * 8);
-                int baseScore = Mathf.RoundToInt(2000f + Director.Instance.Zone * 400f);
-
-                root.AddScore(baseScore);
-                root.AddScore(timeBonus + noHitBonus + grazeBonus);
+                // 原版结算：基础 + 时间 + 无伤 + 擦弹，整体再乘难度倍率
+                float clearT = Mathf.Max(0f, Time.time - _spawnTime);
+                int sector = Director.Instance != null ? Director.Instance.Zone : 1;
+                float timeBonus = Mathf.Max(0f, (GameConfig.ClearTimeBonusBase - clearT) * GameConfig.ClearTimeBonusPerSecond);
+                bool noHit = root.Stats.SectorHits == 0;
+                float noHitBonus = noHit ? GameConfig.ClearNoHitBase + sector * GameConfig.ClearNoHitPerSector : 0f;
+                float grazeBonus = root.Stats.SectorGraze * GameConfig.ClearGrazePerHit;
+                float mul = root.Difficulty.ScoreMul;
+                float baseScore = GameConfig.ClearBaseScore + sector * GameConfig.ClearBasePerSector;
+                int total = Mathf.RoundToInt((baseScore + timeBonus + noHitBonus + grazeBonus) * mul);
+                root.AddScore(total);
+                root.ShowBanner("核心击破 +" + total);
                 root.ShowClear(new[]
                 {
-                    $"核心击破  基础 +{Mathf.RoundToInt(baseScore * root.Difficulty.ScoreMul)}",
-                    $"时间奖励  {Mathf.RoundToInt(elapsed)}s  +{timeBonus}",
-                    $"无伤奖励  {(noHit ? "达成" : "未达成")}  +{noHitBonus}",
-                    $"擦弹奖励   {root.Stats.Graze} 次  +{grazeBonus}",
+                    $"基础分      {Mathf.RoundToInt(baseScore * mul)}",
+                    $"时间奖励    {Mathf.RoundToInt(clearT)}s  +{Mathf.RoundToInt(timeBonus * mul)}",
+                    $"无伤奖励    {(noHit ? "达成" : "未达成")}  +{Mathf.RoundToInt(noHitBonus * mul)}",
+                    $"擦弹奖励    {root.Stats.SectorGraze} 次  +{Mathf.RoundToInt(grazeBonus * mul)}",
                 });
+                root.Stats.SectorGraze = 0;
+                root.Stats.SectorHits = 0;
             }
             if (GameRoot.Instance != null) GameRoot.Instance.Stats.BossKills++;
             AudioDirector.Instance?.PlayExplode();
