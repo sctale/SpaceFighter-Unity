@@ -68,7 +68,23 @@ Unity.exe -batchmode -quit -projectPath D:/V-Coding/space-fighter-unity \
 | **弹体/补给箱** | 7 类弹体精灵（追踪弹/重炮/水雷/针弹…）+ 4 类补给箱图标 | 实机截图 |
 | **安卓中文 HUD** | 随包带 Noto Sans CJK SC 子集（942 字形 / 274KB），修复 v0.14.0 安卓上 IMGUI 中文整段空白 | 模拟器实机截图 |
 
-门禁：`VerifyNumbers` **81 条断言全过**；构建：Windows + Android APK 均 CLI 产出并通过 `aapt2`/`apksigner` 校验。
+门禁：`VerifyNumbers` **278 条断言全过**；构建：Windows + Android APK 均 CLI 产出并通过 `aapt2`/`apksigner` 校验。
+
+### v0.16.0 对标清单（网页版 v2.8.4）
+
+| 域 | 网页版 | Unity 版现状 |
+|---|---|---|
+| 比例 | 画布固定 540 宽，`px→世界` 由画布换算 | ✅ `Px = 10/540`；`GameView` 实时供给所有边界 |
+| 视口 | 移动区 `x∈[31,509]`、`y∈[H*0.18, H-104]` | ✅ 同上，含 20:9 长屏 |
+| 星区节奏 | `buildScript()` 12~17 条剧本 → clearing → Boss | ✅ 逐条移植，含 55% 中期补给 |
+| 敌机/精英/词缀 | 12 种 + 精英门槛 + 3 词缀 | ✅ 同名同参数 |
+| Boss 招式 | 22 招 + 分时 `at()` + 光束实体 + idleFire | ✅ `BossMoves` + `BossLaser` + `Pending` 队列 |
+| 开局 | 护盾 1、无僚机、脉冲 2 级 | ✅ 并进门禁 |
+| 掉落 | 双权重表 + 保底 + 换线箱 | ✅ |
+| 界面 | 顶栏/仪表带/动作环/暂停/结算 | ✅ IMGUI 四层，热区与绘制同源 |
+| 暂停 | 失焦/切后台自动暂停并清输入 | ✅ `OnApplicationPause/Focus` |
+| 震动/触感 | `haptic([...])`（Capacitor） | ❌ 未接（Unity 需 Android 震动插件，暂缺） |
+| 背景视差 | `background.js` 分层视差 | ⚠️ 各星区天空已区分主题，逐层视差未复刻 |
 
 ### 舰船美术管线（v0.15.0 新增）
 
@@ -111,6 +127,16 @@ Unity.exe -batchmode -quit -projectPath D:/V-Coding/space-fighter-unity \
 - 删过 `Library` 之后，`Builds/AndroidProject` 里的 IL2CPP 生成代码会与新的 libil2cpp 冲突（`ld.lld: duplicate symbol`），
   必须整目录删掉重新导出再跑 Gradle。
 - 构建脚本要**校验产物版本号**再改名，否则会拿旧包冒充新版本（本轮真的发生过）。
+- **`Strip Engine Code`（`PlayerSettings.stripEngineCode`）必须关**：开着的话原生 `MonoBehaviour`(class 115)
+  会被剥离，之后每次 `AddComponent` / 脚本实例化 / IMGUI 画字都报
+  `Could not produce class with ID 115`，`GUI.DoSetSkin` 每帧抛 `NullReferenceException`——
+  表现就是**安卓上 HUD 整层不画**，桌面端完全正常（平台差异，极易漏测）。
+  实测 `link.xml` 保 `MonoScript` 无效，只能关裁剪；代价约 +6.4MB 包体。
+- `il2cpp.exe` 会往系统临时目录写文件，那台机器上 `%LOCALAPPDATA%\Temp` 可能被拒；
+  Gradle 前置里要把 `TMP/TEMP` 指到工程内干净目录，否则报 `UnauthorizedAccessException`。
+- 每次 `ExportAndroidProject` 都会重新生成 `Builds/AndroidProject/gradle.properties`，
+  里面的 `org.gradle.jvmargs` 又变回 `-Xmx0M`（headless 下 Unity 算出来的堆是 0），
+  必须在导出后、跑 Gradle 前改回 `-Xmx4g -Dfile.encoding=UTF-8`。
 
 ## 环境前提（本机）
 
