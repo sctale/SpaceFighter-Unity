@@ -18,16 +18,20 @@ Unity.exe -batchmode -quit -projectPath D:/V-Coding/space-fighter-unity \
 
 ## 模块映射
 
+> 网页版源码已并入本仓库：原 `space-fighter/www/` 现在就是 **`web/www/`**
+> （原仓库 `sctale/SpaceFighter` v2.8.4 快照，说明见 [`../web/INTEGRATED.md`](../web/INTEGRATED.md)）。
+> 下表里的 `www/js/*.js` 均指 `web/www/js/`。
+
 | 网页版 | Unity 版 | 状态 |
 |---|---|---|
 | `www/js/core.js`（循环/输入/常量） | `Core/GameRoot.cs` + `Core/GameBootstrap.cs` + `Core/GameConfig.cs` | 已迁移 |
-| `www/js/entities.js` 玩家/武器/敌人 | `Entities/PlayerShip.cs`、`Systems/WeaponSystem.cs`、`Entities/EnemyShip.cs`、`Entities/DroneShip.cs` | 部分迁移 |
-| `www/js/game.js`（Boss/掉落/结算） | `Systems/BossController.cs`、`Systems/Director.cs` | 部分迁移 |
-| `www/js/background.js`（10 星区天空） | `Systems/Starfield.cs` | 简化实现 |
-| `www/js/ui.js`（仪表带/HUD） | `UI/Hud.cs` | 简化实现 |
+| `www/js/entities.js` 玩家/武器/敌人 | `Entities/PlayerShip.cs`、`Systems/WeaponSystem.cs`、`Entities/EnemyShip.cs`、`Entities/DroneShip.cs`、`Entities/BossLaser.cs` | 已迁移（v0.16.0） |
+| `www/js/game.js`（Boss/掉落/结算） | `Systems/BossController.cs`、`Systems/Director.cs` | 已迁移（v0.16.0） |
+| `www/js/background.js`（10 星区天空） | `Systems/Starfield.cs` + `Systems/ZoneSky.cs` | 简化实现（逐层视差未复刻） |
+| `www/js/ui.js`（仪表带/HUD） | `UI/Hud.cs` + `UI/Controls.cs` | 已迁移（v0.16.0） |
 | `www/js/art.js`（程序化美术） | `artgen/gen_ships.py` → `Assets/Resources/Ships/*.png`，运行期由 `Visuals/ShipArt.cs` 载入 | 已替换（舰船/弹体/补给箱） |
-| `www/js/director.js`（波次/星区推进） | `Systems/Director.cs` | 简化实现 |
-| `.tools/design-test.js`（数值断言） | 待建：Unity EditMode 测试复刻同一批断言 | 未做 |
+| `www/js/director.js`（波次/星区推进） | `Systems/Director.cs` | 已迁移（v0.16.0，剧本制） |
+| `.tools/design-test.js`（70 条数值断言） | `Assets/Editor/VerifyNumbers.cs`（278 条，已复刻并扩充） | 已迁移（v0.16.0） |
 
 ## 数值对齐（已从原版抄入 `GameConfig`）
 

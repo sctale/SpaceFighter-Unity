@@ -22,3 +22,14 @@ artgen/fontwork/*.ttc
 artgen/fontwork/*.otf
 .DS_Store
 
+# 网页版并入后的本地依赖与构建产物（web/ 只提交源码）
+web/node_modules/
+web/android/.gradle/
+web/android/build/
+web/android/app/build/
+web/android/capacitor-cordova-android-plugins/build/
+web/android/local.properties
+
+# 旧仓库整包备份（36MB，放本地不进仓库）
+backups/
+

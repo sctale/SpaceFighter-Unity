@@ -1,0 +1,26 @@
+# Normalize line endings so browser and Android tooling do not rewrite files.
+* text=auto eol=lf
+
+# Windows batch files need CRLF.
+*.bat   text eol=crlf
+*.cmd   text eol=crlf
+
+# Gradle and web sources remain LF on every platform.
+*.gradle text eol=lf
+*.js     text eol=lf
+*.json   text eol=lf
+*.css    text eol=lf
+*.html   text eol=lf
+*.md     text eol=lf
+
+# Binary assets.
+*.png    binary
+*.jpg    binary
+*.jpeg   binary
+*.webp   binary
+*.ico    binary
+*.svg    text eol=lf
+*.woff2  binary
+*.keystore binary
+*.jks    binary
+*.apk    binary

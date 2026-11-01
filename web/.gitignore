@@ -1,0 +1,66 @@
+# dependencies
+node_modules/
+
+# logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# build outputs
+dist/
+coverage/
+.gradle/
+build/
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/app/debug/
+android/app/release/
+android/local.properties
+.externalNativeBuild/
+.cxx/
+
+# app packages are distributed through GitHub Releases
+*.apk
+*.aab
+*.ap_
+
+# signing material must never be committed
+*.keystore
+*.jks
+keystore.properties
+
+# local tooling artifacts
+.tools/shots/
+.tools/assets/
+.tools/splash-bg-portrait.png
+.tools/debug*.js
+.tools/arsenal-test.js
+.tools/patch*.py
+.tools/lives-debug.js
+.tools/showcase.js
+.tools/polish.js
+.tools/smoke.js
+.tools/gameplay.js
+.tools/touch-over.js
+.tools/inspect-webview.js
+.tools/launch-test.js
+.tools/final-visual.js
+.tools/visual.js
+.tools/capture-splash.js
+.tools/device-*.js
+.tools/probe-*.js
+.tools/strip-*.js
+.tools/build_assets*.py
+
+# editors and OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# scratch capture folders and one-off shot scripts
+shots/
+.tools/shot-*.js

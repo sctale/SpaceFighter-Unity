@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#04060f">
+<meta name="description" content="太空战斗机：星穹涅槃 — 在霓虹深空的弹幕间起舞。">
+<title>太空战斗机 · 星穹涅槃</title>
+<link rel="stylesheet" href="css/game.css">
+</head>
+<body>
+<div class="app">
+  <main class="stage" id="stage">
+    <canvas id="game" aria-label="太空战斗机游戏画面"></canvas>
+    <div class="stage-scan" aria-hidden="true"></div>
+    <div class="stage-vignette" aria-hidden="true"></div>
+    <div class="stage-warn" id="stageWarn" aria-hidden="true"></div>
+    <div class="stage-corners" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+
+    <!-- ======== HUD ======== -->
+    <div class="hud" id="hud" aria-hidden="true">
+      <header class="hud-top">
+        <div class="score-box">
+          <span class="eyebrow">SCORE</span>
+          <strong id="hudScore">0</strong>
+          <span class="hud-best">BEST <b id="hudBest">0</b></span>
+          <span class="hud-graze">GRAZE <b id="hudGraze">0</b></span>
+        </div>
+        <div class="sector-box">
+          <span class="eyebrow">SECTOR</span>
+          <strong id="hudSector">01</strong>
+          <i id="hudSectorName">新曙光</i>
+        </div>
+        <button class="icon-btn" id="btnPause" aria-label="暂停游戏">
+          <span></span><span></span>
+        </button>
+      </header>
+
+      <div class="combo-box" id="comboBox">
+        <span class="combo-mult" id="comboMult">×1</span>
+        <span class="combo-label">CHAIN <b id="comboCount">0</b></span>
+        <i class="combo-track"><i id="comboFill"></i></i>
+      </div>
+
+      <div class="boss-panel" id="bossPanel" hidden>
+        <div class="boss-meta">
+          <span class="boss-tag">THREAT</span>
+          <strong id="bossName">—</strong>
+          <em id="bossTitle"></em>
+          <span class="boss-phase" id="bossPhase">P1</span>
+        </div>
+        <div class="boss-track"><i id="bossFill"></i><span class="boss-ticks" aria-hidden="true"></span></div>
+        <div class="boss-break" id="bossBreak" aria-hidden="true"><i></i></div>
+        <span class="boss-pattern" id="bossPattern"></span>
+      </div>
+
+      <footer class="hud-bottom" id="hudBottom">
+        <div class="dash-left">
+          <div class="dash-status" aria-label="生存状态">
+            <div class="lives" id="hudLives" aria-label="剩余生命"></div>
+            <span class="shield-chip" id="shieldChip">
+              <i class="shield-pips" id="shieldPips"></i>
+            </span>
+          </div>
+          <button class="weapon-chip" id="weaponChip" type="button" aria-label="切换武器">
+            <span class="weapon-gauge" aria-hidden="true">
+              <span class="weapon-ring" id="weaponRing"></span>
+              <em class="res-badge" id="resonanceBadge">×0</em>
+            </span>
+            <span class="weapon-copy">
+              <span id="weaponName">脉冲炮</span>
+              <i class="weapon-pips" id="weaponPips"></i>
+            </span>
+          </button>
+        </div>
+        <div class="dash-progress" id="dashProgress" aria-hidden="true">
+          <i id="dashProgressFill"></i><b class="dash-progress-boss"></b>
+        </div>
+        <div class="dash-right">
+          <button class="ring-btn ring-btn--focus" id="btnFocus" type="button" aria-label="精准模式">
+            <span>精准</span><small>慢速</small>
+          </button>
+          <button class="ring-btn ring-btn--dash" id="btnDash" type="button" aria-label="冲刺">
+            <span>冲刺</span><small id="dashPct">闪避</small>
+          </button>
+          <button class="ring-btn ring-btn--nova" id="btnNova" type="button" aria-label="释放星爆">
+            <span>星爆</span><small id="novaPct">0%</small>
+          </button>
+        </div>
+      </footer>
+
+      <div class="announce" id="announce" role="status" aria-live="polite">
+        <span class="announce-rule"></span>
+        <div class="announce-copy">
+          <strong id="announceTitle"></strong>
+          <em id="announceSub"></em>
+        </div>
+        <span class="announce-rule"></span>
+      </div>
+
+      <div class="hint" id="gameHint"></div>
+    </div>
+
+    <!-- ======== MENU ======== -->
+    <section class="screen screen--menu is-active" id="screenMenu">
+      <div class="menu-scrim" aria-hidden="true"></div>
+      <div class="menu-wrap">
+        <div class="brand">
+          <div class="brand-mark" aria-hidden="true">
+            <i class="ring ring--a"></i><i class="ring ring--b"></i><b></b>
+          </div>
+          <div class="overline"><span>DEEP SPACE ARCADE</span><i></i><span>VOID ∕ 09</span></div>
+          <h1 class="game-title">
+            <span class="title-main">太空战斗机</span>
+            <span class="title-sub">AURORA RIFT <em>//</em> 星穹涅槃</span>
+          </h1>
+          <p class="tagline">穿过裂隙，在弹幕之间起舞。</p>
+          <div class="feature-chips" aria-label="核心内容">
+            <span>12 种敌机 · 3 词缀</span><span>22 种 Boss 招式 · 破防</span><span>相位冲刺</span><span>3 条武器线 ×5 级</span><span>4 类僚机 · 3 层护盾</span>
+          </div>
+        </div>
+
+        <div class="menu-stats">
+          <div class="menu-stat"><span>最高分</span><strong id="menuBest">0</strong></div>
+          <i class="menu-rule"></i>
+          <div class="menu-stat"><span>最远星区</span><strong id="menuSector">01</strong></div>
+        </div>
+
+        <div class="diff-picker" id="diffPicker" role="radiogroup" aria-label="难度选择">
+          <button type="button" data-diff="cruise" role="radio" aria-checked="false"><b>巡航</b><small>CRUISE</small></button>
+          <button type="button" data-diff="standard" role="radio" aria-checked="true"><b>标准</b><small>STANDARD</small></button>
+          <button type="button" data-diff="abyss" role="radio" aria-checked="false"><b>深渊</b><small>ABYSS</small></button>
+        </div>
+        <p class="diff-note" id="diffNote">标准 · 设计基准</p>
+
+        <div class="menu-actions">
+          <button class="btn btn--primary" id="btnStart">
+            <span class="btn-play" aria-hidden="true"></span>
+            <span>开始巡航</span>
+            <kbd>ENTER</kbd>
+          </button>
+        </div>
+
+
+        <div class="control-hints">
+          <div class="control-hint"><span class="hint-key">拖动</span><span>飞行 · 自动开火</span></div>
+          <div class="control-hint"><span class="hint-key">武器卡</span><span>点按切换武器线</span></div>
+          <div class="control-hint"><span class="hint-key">Q</span><span>切换武器 · 1 2 3 直选</span></div>
+          <div class="control-hint"><span class="hint-key">擦弹</span><span>贴近弹幕充能</span></div>
+          <div class="control-hint"><span class="hint-key">X</span><span>释放星爆</span></div>
+          <div class="control-hint"><span class="hint-key">冲刺</span><span>穿弹短暂无敌</span></div>
+        </div>
+
+        <p class="menu-foot">v2.8.4 · 精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线</p>
+      </div>
+    </section>
+
+    <!-- ======== PAUSE ======== -->
+    <section class="screen screen--pause" id="screenPause" aria-hidden="true">
+      <div class="panel-card">
+        <div class="overline"><span>SYSTEM HOLD</span><i></i></div>
+        <h2 class="screen-title">已暂停</h2>
+        <p class="screen-sub">引擎待命。深空仍在呼吸。</p>
+
+        <div class="build-summary" id="buildSummary" aria-label="当前装配"></div>
+
+        <div class="settings">
+          <div class="setting-row">
+            <span class="setting-copy"><b>音乐与音效</b><small>程序化合成器音轨</small></span>
+            <button class="toggle is-on" id="toggleSound" role="switch" aria-checked="true" aria-label="音效"><i></i></button>
+          </div>
+          <div class="setting-row">
+            <span class="setting-copy"><b>屏幕震动</b><small>增强打击反馈</small></span>
+            <button class="toggle is-on" id="toggleShake" role="switch" aria-checked="true" aria-label="屏幕震动"><i></i></button>
+          </div>
+          <div class="setting-row">
+            <span class="setting-copy"><b>轻柔特效</b><small>降低闪光与粒子密度</small></span>
+            <button class="toggle" id="toggleFx" role="switch" aria-checked="false" aria-label="轻柔特效"><i></i></button>
+          </div>
+          <div class="setting-row">
+            <span class="setting-copy"><b>触感反馈</b><small>受击与爆破时的震动</small></span>
+            <button class="toggle is-on" id="toggleHaptic" role="switch" aria-checked="true" aria-label="触感反馈"><i></i></button>
+          </div>
+        </div>
+
+        <div class="screen-actions">
+          <button class="btn btn--primary" id="btnResume"><span>继续巡航</span><kbd>ESC</kbd></button>
+          <button class="btn btn--ghost" id="btnRestart"><span>重新开始</span><kbd>R</kbd></button>
+          <button class="text-btn" id="btnQuit">返回基地</button>
+        </div>
+        <p class="key-help">SPACE 冲刺 &nbsp;·&nbsp; SHIFT 精准 &nbsp;·&nbsp; X 星爆 &nbsp;·&nbsp; M 静音</p>
+      </div>
+    </section>
+
+    <!-- ======== GAME OVER ======== -->
+    <section class="screen screen--over" id="screenOver" aria-hidden="true">
+      <div class="result-wrap">
+        <div class="overline"><span>RUN TERMINATED</span><i></i></div>
+        <h2 class="screen-title">巡航终止</h2>
+        <p class="screen-sub" id="overSub">信号消失在裂隙深处。</p>
+
+        <div class="result-score">
+          <span>SCORE</span>
+          <strong id="finalScore">0</strong>
+          <div class="result-rank" id="resultRank" aria-label="巡航评级">
+            <b>C</b>
+            <small>RANK</small>
+          </div>
+          <div class="new-record" id="newRecord" hidden>◆ 新纪录 ◆</div>
+        </div>
+        <p class="rank-rule" id="rankRule">评级：按得分与最远星区综合判定</p>
+
+        <div class="result-grid">
+          <div><span>抵达星区</span><b id="finalSector">01</b></div>
+          <div><span>击落敌机</span><b id="finalKills">0</b></div>
+          <div><span>最高连锁</span><b id="finalChain">0</b></div>
+          <div><span>巡航时长</span><b id="finalTime">00:00</b></div>
+          <div><span>擦弹</span><b id="finalGraze">0</b></div>
+          <div><span>星爆释放</span><b id="finalNovas">0</b></div>
+          <div><span>相位穿越</span><b id="finalPhases">0</b></div>
+          <div><span>核心破防</span><b id="finalBreaks">0</b></div>
+          <div><span>受创</span><b id="finalHits">0</b></div>
+          <div><span>最高倍率</span><b id="finalMult">×1</b></div>
+        </div>
+
+        <div class="result-build" id="resultBuild"></div>
+
+        <div class="screen-actions">
+          <button class="btn btn--primary" id="btnRetry"><span>再次出击</span><kbd>R</kbd></button>
+          <button class="btn btn--ghost" id="btnMenu"><span>返回基地</span></button>
+        </div>
+      </div>
+    </section>
+
+    <div class="rotate-hint" aria-hidden="true"><span>建议竖屏游玩</span></div>
+    <div class="toast" id="toast" role="status"></div>
+  </main>
+
+  <footer class="desk-foot" aria-hidden="true">
+    <span data-desk="drag">拖动 / WASD 驾驶</span><i></i>
+    <span><kbd>SPACE</kbd> 冲刺</span><i></i>
+    <span><kbd>X</kbd> 星爆</span><i></i>
+    <span><kbd>ESC</kbd> 暂停</span>
+  </footer>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/art.js"></script>
+<script src="js/background.js"></script>
+<script src="js/entities.js"></script>
+<script src="js/director.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/game.js"></script>
+<script src="js/boot.js"></script>
+</body>
+</html>

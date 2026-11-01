@@ -51,7 +51,7 @@
 环境：Unity **6000.3.10f1**、Android SDK、NDK **27.2.12479018**、JDK 17（Unity 自带即可）。
 
 ```bash
-# 数值门禁（81 条断言，构建前必跑）
+# 数值门禁（278 条断言，构建前必跑）
 Unity.exe -batchmode -quit -projectPath <project> \
   -executeMethod AuroraRift.EditorTools.VerifyNumbers.Run
 
@@ -90,12 +90,19 @@ Assets/Editor/       # CLI 构建、数值门禁、舰船贴图导入规则
 Assets/Resources/    # Ships（程序化生成的舰船 PNG）与字体子集
 artgen/              # Python 美术生成器 + 字体子集脚本 + 预览图
 docs/                # 重构对照表、使用说明、验收截图
+web/                 # 网页版 v2.8.4 源码（玩法/数值的对照基准，见 web/INTEGRATED.md）
+backups/             # 旧仓库整包备份（本地文件，不进 git）
 ```
+
+> **一个仓库维护**：网页版已并入 `web/`（原 `sctale/SpaceFighter` 的 v2.8.4 快照）。
+> 改玩法时先看 `web/www/js/*.js`，落到 `Assets/Scripts/Core/GameConfig.cs`，
+> 再在 `Assets/Editor/VerifyNumbers.cs` 补断言。完整备份（含旧仓库 `.git` 历史）
+> 在 `backups/space-fighter-v2.8.4-backup-20261102.zip`。
 
 ## 已知限制
 
-- 背景/星空仍是简化实现，原版 `background.js` 的逐层视差尚未完全复刻。
-- 移动端目前只有「拖动移动 + 精准环」两套触控；切武器 / NOVA / 力场仍是键盘键位。
+- 触感震动未接（网页版走 Capacitor `haptic`，Unity 需要安卓震动插件）。
+- 背景/星空仍是各星区独立主题的简化实现，原版 `background.js` 的逐层视差尚未完全复刻。
 - APK 使用 Android Debug 签名，只适合个人/家庭安装；上架应用商店需换正式 keystore。
 
 ## License

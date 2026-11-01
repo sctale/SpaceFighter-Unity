@@ -1,0 +1,8 @@
+{
+  "appId": "com.spacelight.fighter",
+  "appName": "太空战斗机",
+  "webDir": "www",
+  "android": {
+    "webContentsDebuggingEnabled": false
+  }
+}
