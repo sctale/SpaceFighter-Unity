@@ -1,5 +1,8 @@
 # 太空战斗机 · Aurora Rift
 
+> **本目录是网页版 v2.8.4 的归档快照，已并入 `SpaceFighter-Unity` 仓库统一维护**（说明见 [`INTEGRATED.md`](./INTEGRATED.md)）。
+> 原独立仓库 `sctale/SpaceFighter` 停止维护；Android 版本请走 Unity 重制版。
+
 一款纯前端、竖屏、单局 3–8 分钟的霓虹深空街机弹幕射击游戏。HTML5 Canvas 负责全部玩法与程序化美术，Capacitor 封装为 Android 应用。
 
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](./LICENSE)
