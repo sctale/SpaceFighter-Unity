@@ -23,6 +23,8 @@
 
 桌面版：`Builds/Windows/SpaceFighter.exe`（Unity 构建产物，本地生成）。
 
+更新记录见 [`CHANGELOG.md`](CHANGELOG.md)。
+
 ## 操作
 
 | 动作 | 桌面 | 触屏 |
