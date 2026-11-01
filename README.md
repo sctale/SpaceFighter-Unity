@@ -3,16 +3,23 @@
 把网页版《太空战斗机 · Aurora Rift》用 Unity 6 重做的竖屏弹幕射击。Android APK 优先，桌面版用于快速验证与截图。
 
 <p>
-  <img src="docs/shots/android_v016_final_play2.png" width="300" alt="Android 实机战斗画面" />
-  <img src="docs/shots/unity_boss_laser.png" width="300" alt="Boss 扫射光束" />
-  <img src="artgen/preview.png" width="560" alt="全部舰船、弹体与补给箱美术" />
+  <img src="docs/shots/unity_menu_v017.png" width="290" alt="开始界面" />
+  <img src="docs/shots/android_v017_play.png" width="290" alt="战斗 HUD" />
+  <img src="artgen/icon_preview.png" width="290" alt="应用图标" />
 </p>
 
 ## 这一版的重点
 
+- **界面按网页版重做（v0.17.0）**：开始菜单（品牌菱形 + 大标题 + 特性胶囊 + 战绩卡 + 难度三选 +
+  渐变主按钮 + 六条操作提示）、战斗 HUD（SCORE/SECTOR 题头、连锁盒、THREAT Boss 卡、
+  底部仪表带 + 三枚动作环）、暂停页与结算页，版式与配色都对着 `web/www/css/game.css` 做。
+- **游戏流程对齐**：星区开场 / WARNING / Boss 登场 / PHASE / CORE BREAK / OVERLOAD /
+  HULL BREACH / SIGNAL LOST 全部走网页版那套公告模型；清场后先亮 2.4 秒预警再入场。
+- **难度对齐**：敌机弹速 `min(300, 150×(1+tier×0.14))`、扇形/环爆/散射/重弹/针弹/水雷/波动弹/
+  母舰的弹数、角度、速度逐条照 `entities.js` 抄；航母每 2.6~3.6 秒召唤。
 - **特性对齐网页版 v2.8.4**：像素比例（画布 540 宽）、视口边界、星区剧本、Boss 光束与分时出招、
-  开局配置、掉落与保底、界面四层与动作环热区，全部按 `space-fighter/www/js/` 源码逐条抄，
-  并由 `VerifyNumbers` 278 条数值断言守住。
+  开局配置、掉落与保底、界面四层与动作环热区，全部按 `web/www/js/` 源码逐条抄，
+  并由 `VerifyNumbers` 281 条数值断言守住。
 - **舰船美术全部独立绘制**：玩家三条武器线三套涂装、12 种敌机、3 类僚机、3 台 Boss、7 类弹体、补给箱；金属渐变、装甲倒角、面板刻线、自发光引擎，不再是几何占位图。
 - **3 台 Boss 各自独立**：Gatekeeper / Weaver / Helios，本体 + 旋转环 + 呼吸光环 + 核心辉光；受击只闪外圈，持续输出不会把机体洗成灰白。
 - **完整玩法**：三条武器线（蓄能 / 失谐 / 共鸣 / 换线）、擦弹与相位穿弹、冲刺、星爆 NOVA、棱镜力场、过载、三档难度、10 个星区、Boss 22 招、破防与临界、僚机编队、掉落保底。
@@ -24,7 +31,7 @@
 
 到 [Releases](https://github.com/sctale/SpaceFighter-Unity/releases/latest) 下载：
 
-- `AuroraRift-Unity-v0.16.0.apk`（Android Debug 签名，安装时允许“未知来源”即可）
+- `AuroraRift-Unity-v0.17.0.apk`（Android Debug 签名，安装时允许“未知来源”即可）
 
 桌面版：`Builds/Windows/SpaceFighter.exe`（Unity 构建产物，本地生成）。
 
@@ -71,6 +78,7 @@ Unity.exe -batchmode -quit -projectPath <project> -buildTarget Android \
 ```bash
 python artgen/gen_ships.py     # 输出到 Assets/Resources/Ships/*.png
 python artgen/preview.py       # 输出 artgen/preview.png 总览图
+python artgen/gen_icon.py      # 输出 Assets/Icons/*（构建时进 APK 图标）
 ```
 
 设计语言、尺寸约定、受击遮罩与导入设置见 [`docs/PORTING.md`](docs/PORTING.md)。
@@ -87,8 +95,8 @@ python artgen/gen_font.py <path-to-NotoSansCJK-Regular.ttc>
 ```
 Assets/Scripts/      # 核心循环、实体、Boss、导演、HUD、视觉层
 Assets/Editor/       # CLI 构建、数值门禁、舰船贴图导入规则
-Assets/Resources/    # Ships（程序化生成的舰船 PNG）与字体子集
-artgen/              # Python 美术生成器 + 字体子集脚本 + 预览图
+Assets/Resources/    # Ships（舰船 PNG）、Icon（应用图标）与字体子集
+artgen/              # Python 美术生成器（舰船/图标）+ 字体子集脚本 + 预览图
 docs/                # 重构对照表、使用说明、验收截图
 web/                 # 网页版 v2.8.4 源码（玩法/数值的对照基准，见 web/INTEGRATED.md）
 backups/             # 旧仓库整包备份（本地文件，不进 git）
@@ -103,6 +111,7 @@ backups/             # 旧仓库整包备份（本地文件，不进 git）
 
 - 触感震动未接（网页版走 Capacitor `haptic`，Unity 需要安卓震动插件）。
 - 背景/星空仍是各星区独立主题的简化实现，原版 `background.js` 的逐层视差尚未完全复刻。
+- 自适应图标只覆盖 `app_icon.xml`（Unity 的清单引用名），圆形图标沿用同一张前景。
 - APK 使用 Android Debug 签名，只适合个人/家庭安装；上架应用商店需换正式 keystore。
 
 ## License
