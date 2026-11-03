@@ -383,6 +383,16 @@ def _mats(tag, base=(0.030, 0.040, 0.062), armor=(0.060, 0.078, 0.110)):
             mat_pbr(tag + "_dark", (0.012, 0.016, 0.026), 0.70, 0.55))
 
 
+def _star(points, r0, r1, rot=0.0):
+    """星形轮廓：外半径 r0 / 内半径 r1 交替（重弹的锯齿核用）。"""
+    pts = []
+    for i in range(points * 2):
+        r = r0 if i % 2 == 0 else r1
+        a = rot + i * math.pi / points
+        pts.append((math.cos(a) * r, math.sin(a) * r))
+    return pts
+
+
 def _octagon(r, squash=1.0, n=8, rot=0.0):
     return [(math.cos(rot + i * 2 * math.pi / n) * r,
              math.sin(rot + i * 2 * math.pi / n) * r * squash) for i in range(n)]
@@ -517,8 +527,14 @@ def build_from_spec(name, spec):
             objs.append(box(f"{name}_b{i}", size, loc, table[mat], bev))
         elif kind == "cyl":
             _, r, d, loc, mat = part[:5]
-            rot = part[5] if len(part) > 5 else (0, 0, 0)
-            objs.append(cyl(f"{name}_c{i}", r, d, loc, table[mat], 20, rot=rot))
+            # 第 6 个参数可以是顶点数（int）也可以是旋转（tuple），两种都写进过数据表
+            rot, verts = (0, 0, 0), 20
+            for v in part[5:]:
+                if isinstance(v, tuple):
+                    rot = v
+                else:
+                    verts = int(v)
+            objs.append(cyl(f"{name}_c{i}", r, d, loc, table[mat], verts, rot=rot))
         elif kind == "ring":
             _, r0, r1, a0, a1, z0, z1, mat = part
             objs.append(arc_ring(f"{name}_r{i}", r0, r1, a0, a1, z0, z1, table[mat], seg=28, bevel=0.0))
@@ -650,6 +666,150 @@ def build_boss_helios(accent):
 
 def _enemy_builder(asset):
     return lambda accent: build_from_spec(asset, ENEMY_SPECS[asset])
+
+
+# ================================================================= 弹体 / 僚机 / 补给箱
+# 这些都是 10–34px 的小件：造型不重要，**亮度和剪影**才决定能不能看清。
+# 规则：主体用自发光（发光件对布光免疫，缩到 16px 也不会糊成黑块），
+# 外面只留一圈很窄的暗金属边，让它在深色背景上有轮廓。
+
+
+def _lens(w, l):
+    """尖头椭圆（纵向弹体轮廓）。"""
+    return [(0, l), (w, l * 0.35), (w * 0.85, -l * 0.55), (0, -l), (-w * 0.85, -l * 0.55), (-w, l * 0.35)]
+
+
+def build_bullet(kind, accent):
+    rim = mat_pbr("bl_rim", (0.020, 0.026, 0.040), 0.85, 0.30)
+    hot = mat_emit("bl_hot", accent, 1.35)
+    pin = mat_emit("bl_pin", tuple(min(1.0, c * 1.12 + 0.06) for c in accent), 1.5)
+    objs = []
+    if kind in ("bolt", "lance", "micro"):
+        w = {"bolt": 0.30, "lance": 0.22, "micro": 0.34}[kind]
+        l = {"bolt": 0.96, "lance": 1.00, "micro": 0.86}[kind]
+        objs.append(poly_prism("rim", _lens(w, l), -0.10, 0.10, rim, 0.012))
+        objs.append(poly_prism("body", _lens(w * 0.78, l * 0.96), 0.10, 0.16, hot, 0.006))
+        objs.append(poly_prism("pin", _lens(w * 0.20, l * 0.52), 0.16, 0.20, pin, 0.004))
+    elif kind == "orb":
+        objs.append(poly_prism("rim", _octagon(0.94, 1.0, 20), -0.12, 0.10, rim, 0.02))
+        objs.append(cyl("body", 0.74, 0.16, (0, 0, 0.14), hot, 24, bevel=0.012))
+        objs.append(cyl("pin", 0.20, 0.18, (0, 0, 0.20), pin, 18, bevel=0.008))
+    elif kind == "heavy":
+        objs.append(poly_prism("rim", _octagon(0.94, 1.0, 12), -0.14, 0.10, rim, 0.02))
+        objs.append(poly_prism("body", _octagon(0.78, 1.0, 12), 0.10, 0.18, hot, 0.01))
+        objs.append(poly_prism("pin", _star(6, 0.24, 0.11), 0.18, 0.23, pin, 0.006))
+    elif kind == "needle":
+        objs.append(poly_prism("rim", _lens(0.26, 1.00), -0.09, 0.09, rim, 0.010))
+        objs.append(poly_prism("body", _lens(0.18, 0.96), 0.09, 0.15, hot, 0.004))
+        objs.append(poly_prism("pin", _lens(0.07, 0.80), 0.15, 0.19, pin, 0.0))
+    elif kind == "mine":
+        objs.append(poly_prism("rim", _octagon(0.80, 1.0, 8), -0.12, 0.10, rim, 0.018))
+        objs.append(cyl("body", 0.58, 0.18, (0, 0, 0.14), hot, 16, bevel=0.01))
+        for i in range(8):
+            a = i * math.pi / 4
+            objs.append(box("stud", (0.16, 0.30, 0.10),
+                            (math.cos(a) * 0.72, math.sin(a) * 0.72, 0.02), rim, 0.010,
+                            rot=(0, 0, a - math.pi / 2)))
+        objs.append(cyl("pin", 0.15, 0.22, (0, 0, 0.20), pin, 14, bevel=0.006))
+    return objs, []
+
+
+DRONE_SPECS = {
+    # gunner：紧凑双管
+    "drone_seeker": dict(accent="#69F5DC", body=[
+        ("poly", [(0, 0.92), (0.30, 0.30), (0.66, 0.52), (0.58, -0.20), (0.26, -0.52),
+                  (0, -0.86), (-0.26, -0.52), (-0.58, -0.20), (-0.66, 0.52), (-0.30, 0.30)], -0.05, 0.06, "hull"),
+        ("poly", [(0, 0.56), (0.16, 0.10), (0.18, -0.30), (-0.18, -0.30), (-0.16, 0.10)], 0.06, 0.09, "armor"),
+        ("box", (0.07, 0.34, 0.03), (0.24, 0.44, 0.06), "neon", 0.0),
+        ("box", (0.07, 0.34, 0.03), (-0.24, 0.44, 0.06), "neon", 0.0),
+    ]),
+    # lance：长炮僚机
+    "drone_cannon": dict(accent="#FF6F91", body=[
+        ("poly", [(0, 0.94), (0.16, 0.40), (0.52, 0.30), (0.52, -0.10), (0.18, -0.24),
+                  (0.12, -0.80), (-0.12, -0.80), (-0.18, -0.24), (-0.52, -0.10),
+                  (-0.52, 0.30), (-0.16, 0.40)], -0.05, 0.06, "hull"),
+        ("box", (0.10, 0.80, 0.08), (0, 0.06, 0.08), "armor", 0.006),
+        ("box", (0.045, 0.62, 0.02), (0, 0.02, 0.13), "neon", 0.0),
+    ]),
+    # aegis：环形守护僚机
+    "drone_support": dict(accent="#9B8CFF", body=[
+        ("poly", _octagon(0.74, 1.0, 8, math.pi / 8), -0.06, 0.06, "hull"),
+        ("poly", _octagon(0.50, 1.0, 8, math.pi / 8), 0.06, 0.09, "armor"),
+        ("ring", 0.34, 0.44, 0.0, 2 * math.pi, 0.09, 0.105, "neon"),
+        ("cyl", 0.16, 0.14, (0, 0, 0.11), "neon"),
+    ]),
+    # swarm：导弹巢僚机
+    "drone_swarm": dict(accent="#FFC24B", body=[
+        ("poly", [(0, 0.90), (0.22, 0.34), (0.62, 0.44), (0.50, -0.24), (0.20, -0.44),
+                  (0, -0.78), (-0.20, -0.44), (-0.50, -0.24), (-0.62, 0.44), (-0.22, 0.34)],
+         -0.05, 0.06, "hull"),
+        ("box", (0.44, 0.22, 0.08), (0, -0.10, 0.07), "armor", 0.008),
+        ("cyl", 0.05, 0.12, (0.14, -0.10, 0.11), "neon", 10),
+        ("cyl", 0.05, 0.12, (-0.14, -0.10, 0.11), "neon", 10),
+        ("cyl", 0.05, 0.12, (0, 0.14, 0.11), "neon", 10),
+    ]),
+}
+
+
+def build_drone(name):
+    return build_from_spec(name, DRONE_SPECS[name])
+
+
+CRATE_TINT = {
+    "crate_weapon": "#FFD27A", "crate_shield": "#9B8CFF", "crate_drone": "#8FA4C9",
+    "crate_prism": "#FF6F91", "crate_swarm": "#FFC24B", "crate_reflect": "#FFD27A",
+    "crate_life": "#FF6F91", "crate_gem": "#FFE9B0", "crate_swap": "#69F5DC",
+}
+
+
+def build_crate(name):
+    """补给箱：六边形胶囊 + 自发光图徽（俯视下靠图徽分辨种类）。"""
+    tint = hex_rgb(CRATE_TINT[name])
+    hull = mat_pbr("crate_hull", (0.040, 0.050, 0.075), 0.90, 0.30)
+    band = mat_pbr("crate_band", (0.075, 0.090, 0.125), 0.85, 0.38)
+    neon = mat_emit("crate_neon", tint, 1.30)
+    objs = [
+        poly_prism("base", _octagon(0.72, 1.0, 6, math.pi / 6), -0.10, 0.08, hull, 0.02),
+        poly_prism("lid", _octagon(0.52, 1.0, 6, math.pi / 6), 0.08, 0.13, band, 0.012),
+        arc_ring("trim", 0.56, 0.64, 0, 2 * math.pi, 0.08, 0.11, neon, seg=36, bevel=0.0),
+    ]
+    glyph_z = (0.13, 0.17)
+    if name == "crate_weapon":
+        for i in range(2):
+            s = 0.30 - i * 0.10
+            y = 0.10 - i * 0.24
+            objs.append(poly_prism("chev", [(-s, y - 0.16), (0, y + 0.10), (s, y - 0.16)],
+                                   glyph_z[0], glyph_z[1], neon, 0.0))
+    elif name == "crate_swarm":
+        # 三个点（蜂群），与武器箱的双箭头区分开
+        for dx, dy in ((-0.20, 0.16), (0.20, 0.16), (0, -0.18)):
+            objs.append(cyl("dot", 0.11, 0.06, (dx, dy, 0.15), neon, 12, bevel=0.0))
+    elif name == "crate_shield":
+        objs.append(poly_prism("sh", [(-0.26, 0.22), (0.26, 0.22), (0.26, -0.06),
+                                      (0, -0.30), (-0.26, -0.06)], glyph_z[0], glyph_z[1], neon, 0.0))
+    elif name == "crate_drone":
+        objs.append(poly_prism("core", _octagon(0.14, 1.0, 8), glyph_z[0], glyph_z[1], neon, 0.0))
+        for sx in (-1, 1):
+            objs.append(box("wing", (0.22, 0.09, 0.04), (sx * 0.24, 0.04, 0.15), neon, 0.0))
+    elif name == "crate_prism":
+        objs.append(poly_prism("tri", [(0, 0.26), (0.28, -0.22), (-0.28, -0.22)],
+                               glyph_z[0], glyph_z[1], neon, 0.0))
+    elif name == "crate_reflect":
+        objs.append(arc_ring("ring_g", 0.16, 0.26, 0, 2 * math.pi, glyph_z[0], glyph_z[1],
+                             neon, seg=28, bevel=0.0))
+        objs.append(box("bar", (0.08, 0.44, 0.04), (0, 0, 0.15), neon, 0.0))
+    elif name == "crate_life":
+        objs.append(box("v", (0.10, 0.44, 0.04), (0, 0, 0.15), neon, 0.0))
+        objs.append(box("h", (0.36, 0.10, 0.04), (0, 0.02, 0.15), neon, 0.0))
+    elif name == "crate_swap":
+        for sx in (-1, 1):
+            objs.append(poly_prism("arr", [(sx * 0.06, 0.26), (sx * 0.28, 0.0), (sx * 0.06, -0.26)],
+                                   glyph_z[0], glyph_z[1], neon, 0.0))
+    elif name == "crate_gem":
+        objs.append(poly_prism("gem", [(0, 0.30), (0.22, 0.06), (0, -0.26), (-0.22, 0.06)],
+                               glyph_z[0], glyph_z[1], neon, 0.0))
+        objs.append(box("facet", (0.06, 0.50, 0.02), (0, 0, 0.18), mat_emit("gem_pin", (1.0, 0.98, 0.90), 1.7), 0.0))
+    return objs, []
 
 
 MODELS = {
@@ -832,6 +992,27 @@ def main():
             print("SKIP unknown asset:", name)
             continue
         render_asset(name, out, samples)
+
+
+
+# 弹体（96 / 128）：10-30px 下靠亮度与剪影，不靠细节
+def _bullet_builder(kind):
+    return lambda accent: build_bullet(kind, accent)
+
+
+for _k, _a, _c in (("bolt", "#35E0C8", 96), ("lance", "#FF5C8A", 96), ("micro", "#FFC24B", 96)):
+    MODELS["bullet_player_" + _k] = (_bullet_builder(_k), _c, _a)
+MODELS["bullet_enemy_needle"] = (_bullet_builder("needle"), 96, "#8CF7EA")
+MODELS["bullet_enemy_orb"] = (_bullet_builder("orb"), 96, "#FF6F91")
+MODELS["bullet_enemy_heavy"] = (_bullet_builder("heavy"), 128, "#FFA76B")
+MODELS["bullet_enemy_mine"] = (_bullet_builder("mine"), 128, "#FFD27A")
+
+# 僚机（192）与补给箱（192）
+for _k in DRONE_SPECS:
+    MODELS[_k] = ((lambda n: (lambda acc: build_drone(n)))(_k), 192, DRONE_SPECS[_k]["accent"])
+for _k in CRATE_TINT:
+    MODELS[_k] = ((lambda n: (lambda acc: build_crate(n)))(_k), 192, CRATE_TINT[_k])
+
 
 
 if __name__ == "__main__":

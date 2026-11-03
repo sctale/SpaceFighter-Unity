@@ -38,10 +38,31 @@ ACCENT = {
     "enemy_carrier": (143, 164, 201),
     "enemy_shardling": (255, 154, 180),
     "bullet_enemy_needle": (140, 247, 234),
+    # v0.19.x：弹体 / 僚机 / 补给箱
+    "bullet_player_bolt": (53, 224, 200),
+    "bullet_player_lance": (255, 92, 138),
+    "bullet_player_micro": (255, 194, 75),
+    "bullet_enemy_orb": (255, 111, 145),
+    "bullet_enemy_heavy": (255, 167, 107),
+    "bullet_enemy_mine": (255, 210, 122),
+    "drone_seeker": (105, 245, 220),
+    "drone_cannon": (255, 111, 145),
+    "drone_support": (155, 140, 255),
+    "drone_swarm": (255, 194, 75),
+    "crate_weapon": (255, 210, 122),
+    "crate_shield": (155, 140, 255),
+    "crate_drone": (143, 164, 201),
+    "crate_prism": (255, 111, 145),
+    "crate_swarm": (255, 194, 75),
+    "crate_reflect": (255, 210, 122),
+    "crate_life": (255, 111, 145),
+    "crate_gem": (255, 233, 176),
+    "crate_swap": (105, 245, 220),
 }
 
 # 大块机体光晕弱一点、小而快的敌机强一点，避免满屏糊成一片
-STRENGTH = {"boss_": 0.42, "player_": 0.5, "enemy_": 0.78}
+STRENGTH = {"boss_": 0.42, "player_": 0.5, "enemy_": 0.78,
+            "bullet_": 0.9, "drone_": 0.55, "crate_": 0.62}
 
 
 def strength_for(name):
@@ -53,7 +74,8 @@ def strength_for(name):
 
 def bake(path, tint, strength, radius_frac=0.026, lift=None):
     if lift is None:
-        lift = 0.14 if os.path.basename(path).startswith("enemy_") else 0.08
+        base = os.path.basename(path)
+        lift = 0.0 if base.startswith("bullet_") else 0.14 if base.startswith("enemy_") else 0.08
     im = Image.open(path).convert("RGBA")
     w, _ = im.size
     a = im.getchannel("A")
