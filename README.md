@@ -3,12 +3,16 @@
 把网页版《太空战斗机 · Aurora Rift》用 Unity 6 重做的竖屏弹幕射击。Android APK 优先，桌面版用于快速验证与截图。
 
 <p>
-  <img src="docs/shots/android_v018_play.png" width="290" alt="战斗 HUD" />
-  <img src="docs/shots/android_v018_menu.png" width="290" alt="开始界面" />
-  <img src="docs/shots/android_v018_pause.png" width="290" alt="暂停页" />
+  <img src="docs/shots/android_v019_play.png" width="290" alt="战斗 HUD（Blender 重制机体）" />
+  <img src="docs/shots/art_batch_v019.jpg" width="290" alt="机体与 Boss 图鉴" />
+  <img src="docs/shots/art_pilot_compare.jpg" width="290" alt="旧手绘 / 纯 3D / 3D+外发光" />
 </p>
 
 ## 这一版的重点
+
+- **美术重制（v0.19.0）**：玩家三线、12 种敌机、3 台 Boss 共 **18 张**改用
+  Blender 3D 建模 + 正交顶视渲图 + 同色外发光；文件名/画布/guid 不变，`ShipArt` 约定由渲染端对齐。
+  管线在 `artgen/blender/`（`gen_art.py` / `post_glow.py` / `check_art.py`），可复现、可单张重渲。
 
 - **手感对齐网页版（v0.18.0）**：修掉三个真 bug——蓄能按帧扣（pulse LV1 实际掉电 53/s
   而不是 7.4/s，两秒打空、长期失谐）、换线不清停留计时（共鸣可以连按刷满）、
@@ -35,7 +39,7 @@
 
 到 [Releases](https://github.com/sctale/SpaceFighter-Unity/releases/latest) 下载：
 
-- `AuroraRift-Unity-v0.18.0.apk`（Android Debug 签名，安装时允许“未知来源”即可）
+- `AuroraRift-Unity-v0.19.0.apk`（Android Debug 签名，安装时允许“未知来源”即可）
 
 桌面版：`Builds/Windows/SpaceFighter.exe`（Unity 构建产物，本地生成）。
 
