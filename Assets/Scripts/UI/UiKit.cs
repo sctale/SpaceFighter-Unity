@@ -36,6 +36,28 @@ namespace AuroraRift
             _white = Solid();
         }
 
+        static Texture2D _veilTop, _veilBottom;
+        /// <summary>顶栏压暗带：最暗在顶边、向下渐隐（原版 .hud::before 的那条 136px 渐变）。</summary>
+        public static Texture2D VeilTop => _veilTop != null ? _veilTop : (_veilTop = MakeVeil(false));
+        /// <summary>底栏压暗带：最暗在底边、向上渐隐（原版 .hud::after 的那条 118px 渐变）。</summary>
+        public static Texture2D VeilBottom => _veilBottom != null ? _veilBottom : (_veilBottom = MakeVeil(true));
+
+        static Texture2D MakeVeil(bool darkAtBottom)
+        {
+            const int H = 96;
+            var t = new Texture2D(2, H, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            for (int y = 0; y < H; y++)
+            {
+                float k = y / (float)(H - 1);                 // Texture2D 的 y=0 在底部
+                float a = darkAtBottom ? k : 1f - k;
+                a = a * a * (3f - 2f * a);                    // 平滑折点，接近 CSS 的 55% 停点
+                var c = new Color(1f, 1f, 1f, a);
+                for (int x = 0; x < 2; x++) t.SetPixel(x, y, c);
+            }
+            t.Apply();
+            return t;
+        }
+
         // ------------------------------------------------------------ 基础贴图
 
         static Texture2D Solid()

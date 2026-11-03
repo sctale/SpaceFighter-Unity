@@ -46,8 +46,10 @@ namespace AuroraRift
             NovaRect = C(w - 80f, cy, ring, ring);
             DashRect = C(NovaRect.center.x - 98f, cy, ring, ring);
             PrecisionRect = C(DashRect.center.x - 98f, cy, ring, ring);
-            WeaponRect = new Rect(40f + 124f + 22f, cy - 34f, 210f, 68f);
-            PauseRect = C(w - 40f - 42f, SafeTopRef + 22f + 42f, 84f, 84f);
+            // 武器胶囊热区对齐 HUD 画出来的 chip（--pad 18.4 + dash-status 62 + gap 9，全部 ×2）
+            WeaponRect = new Rect(36.8f + 124f + 18f, cy - 34f, 160f, 68f);
+            // 暂停键贴在 .hud-top 第一行（top = pad = 18.4px），不是再往下 32px
+            PauseRect = C(w - 36.8f - 42f, SafeTopRef + 36.8f + 42f, 84f, 84f);
             _built = true;
         }
 
