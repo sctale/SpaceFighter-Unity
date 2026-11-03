@@ -107,6 +107,10 @@ def build():
 
     # 舰船
     ship = Image.open(SHIP).convert("RGBA")
+    # 3D 机体的装甲很暗，压在暗底板上小尺寸会像"挖了个洞"：图标里单独提亮一点
+    sr, sg, sb, sa = ship.split()
+    lift = lambda v: min(255, int(v * 1.16 + 10))
+    ship = Image.merge("RGBA", (sr.point(lift), sg.point(lift), sb.point(lift), sa))
     target_h = int(N * 0.60)
     scale = target_h / ship.height
     ship = ship.resize((int(ship.width * scale), target_h), Image.LANCZOS)
