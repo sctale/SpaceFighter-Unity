@@ -278,6 +278,12 @@ namespace AuroraRift
 
         float NextCd() => SpellCooldown(_phase, _tier, _spellCount, _desperate);
 
+        /// <summary>
+        /// 破防槽是否累积。原版是 `if (broken <= 0) stagger += dmg`：破防窗口内不攒槽，
+        /// 否则槽一直满着，眩晕结束第一发又触发下一轮，持续输出能把 Boss 永久锁住。
+        /// </summary>
+        public static bool BreakGaugeAccrues(bool stunned, bool broken) => !stunned && !broken;
+
         // ------------------------------------------------------------ 招式内的分时发射
         /// <summary>
         /// 原版一招里是分时刻发好几段的（this.at(a, 0.1, ...) / at(a, 1.25, ...)），
@@ -997,7 +1003,9 @@ namespace AuroraRift
             _flashT = 0.07f;
             float mul = _stun > 0f ? GameConfig.BossBreakDamageMul : 1f;
             Hp -= dmg * mul;
-            BreakGauge = Mathf.Min(_breakMax, BreakGauge + dmg);
+            // 破防期间不再攒槽（原版 if (broken <= 0)）。少了这一条，槽在眩晕里一直保持满值，
+            // 眩晕一结束的第一发又立刻触发下一次眩晕 —— 持续输出就能把 Boss 永久锁在原地不出招。
+            if (BreakGaugeAccrues(_stun > 0f, false)) BreakGauge = Mathf.Min(_breakMax, BreakGauge + dmg);
             if (BreakGauge >= _breakMax && _stun <= 0f)
             {
                 BreakGauge = 0f;

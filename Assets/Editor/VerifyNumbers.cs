@@ -540,6 +540,11 @@ namespace AuroraRift.EditorTools
             Check("beh.bossCd.chainTier0", BossController.SpellCooldown(2, 0, 4, false), 0.16f);
             Check("beh.bossCd.chainOther", BossController.SpellCooldown(2, 1, 3, false), 0.16f);
             Check("beh.bossCd.desperate", BossController.SpellCooldown(2, 0, 1, true), 0.16f);
+            // 破防期间不攒槽：否则持续输出会把 Boss 永久锁在眩晕里（v0.19.2 实测）
+            CheckTrue("beh.bossBreak.frozenWhileStunned",
+                      !BossController.BreakGaugeAccrues(stunned: true, broken: false));
+            CheckTrue("beh.bossBreak.accruesNormally",
+                      BossController.BreakGaugeAccrues(stunned: false, broken: false));
 
             // ---- 武器别名：满级要有满级的叫法，不能一路"脉冲"到五档 ----
             Check("beh.alias.pulse1", GameConfig.WeaponName("pulse", 1), "脉冲炮");

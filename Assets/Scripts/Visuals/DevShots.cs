@@ -20,6 +20,9 @@ namespace AuroraRift
         string _dir;
         string _tag;
         string _move;
+        bool _probe;
+        bool _quit;
+        float _probeT;
         float _quitAt = -1f;
         bool _startNextFrame;
         bool _shots;
@@ -54,6 +57,8 @@ namespace AuroraRift
             d._dir = Path.Combine(Directory.GetCurrentDirectory(), "docs", "shots");
             d._tag = Arg(args, "-tag") ?? ("zone" + (Arg(args, "-zone") ?? "1"));
             d._move = Arg(args, "-move");
+            d._probe = Array.IndexOf(args, "-probe") >= 0;
+            d._quit = Array.IndexOf(args, "-quit") >= 0;
             Directory.CreateDirectory(d._dir);
         }
 
@@ -87,6 +92,14 @@ namespace AuroraRift
                           " cam=" + (Camera.main != null) +
                           " director=" + (Director.Instance != null));
             }
+
+            if (_probe)
+            {
+                _probeT += Time.unscaledDeltaTime;
+                if (_probeT >= 0.5f) { _probeT = 0f; Probe(); }
+            }
+            if (_quit && _quitAt <= 0f) _quitAt = _clock + 26f;
+            if (_quitAt > 0f && _clock >= _quitAt) { _quitAt = -1f; Application.Quit(); }
 
             if (_laser && !_laserCast && _clock > 4.4f)
             {
@@ -138,6 +151,35 @@ namespace AuroraRift
                 _quitAt = -1f;
                 Application.Quit();
             }
+        }
+
+        /// <summary>
+        /// 每 0.5 秒打一行运行时遥测：世界状态、弹数、蓄能、Boss 的出招状态。
+        /// 用来回答"Boss 到底有没有出招""子弹有没有生出来"这类只有跑起来才知道的问题。
+        /// </summary>
+        void Probe()
+        {
+            var g = GameRoot.Instance;
+            var d = Director.Instance;
+            int pb = 0, eb = 0;
+            var pool = BulletPool.Instance;
+            if (pool != null)
+            {
+                foreach (var b in pool.Active)
+                {
+                    if (b == null) continue;
+                    if (b.Team == Team.Player) pb++; else eb++;
+                }
+            }
+            var boss = d != null ? d.Boss : null;
+            string bossInfo = boss == null
+                ? "boss=-"
+                : $"boss hp={boss.Hp:F0}/{boss.MaxHp:F0} ph={boss.Phase + 1} casting={boss.Casting} " +
+                  $"tell={boss.TelegraphLeft:F2} cast=[{boss.CastLabel}]";
+            float charge = g != null && g.Player != null ? g.Player.Weapons.Active.Charge : 0f;
+            Debug.Log($"[PROBE] t={_clock:F1} state={(g != null ? g.State.ToString() : "-")} " +
+                      $"score={(g != null ? g.Score : 0f):F0} pb={pb} eb={eb} charge={charge:F0} " +
+                      $"zone={(d != null ? d.Zone : 0)} run={(d != null ? d.State.ToString() : "-")} {bossInfo}");
         }
 
         /// <summary>

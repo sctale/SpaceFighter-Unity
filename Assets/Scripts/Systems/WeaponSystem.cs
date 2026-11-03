@@ -177,7 +177,9 @@ namespace AuroraRift
             {
                 var pos = o + new Vector3(dx * P, dy * P, 0f);
                 if (Precision) { pos.x = o.x + dx * P * GameConfig.FocusPatternCompress; vx *= GameConfig.FocusLateralMul; }
-                BulletPool.Instance.Spawn(Team.Player, pos, new Vector2(vx, -0f) + Vector2.up * sp,
+                // vx 是「原版像素/秒」（±45/±85/±105），必须乘 Px 才是世界速度。
+                // 之前漏了这一步：侧翼子弹以 2400+px/s 横飞，一帧就出屏，只有中间那发能打到人。
+                BulletPool.Instance.Spawn(Team.Player, pos, new Vector2(vx * P, 0f) + Vector2.up * sp,
                     dmg, rad > 0 ? rad : r, def.Tint, "bolt", life);
             }
             switch (lv)
