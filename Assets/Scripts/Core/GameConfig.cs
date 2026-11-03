@@ -137,6 +137,8 @@ namespace AuroraRift
         public static readonly Color RoseDeep = Hex("9F1239");
         public static readonly Color Gold = Hex("FFC24B");
         public static readonly Color GoldDeep = Hex("92600A");
+        public static readonly Color Violet = Hex("9B8CFF");     // 原版 P.violet
+        public static readonly Color VioletDeep = Hex("5B4ECF");
 
         public static readonly LineDef Pulse = new LineDef("pulse", "脉冲", 1250f, 7.4f, 15.5f, Teal, TealDeep,
             new[] { 0.120f, 0.108f, 0.098f, 0.090f, 0.082f });
@@ -150,6 +152,23 @@ namespace AuroraRift
             if (id == "prism") return Prism;
             if (id == "swarm") return Swarm;
             return Pulse;
+        }
+
+        /// <summary>
+        /// 武器名按等级换叫法（原版 ui.js:8-12）：满级那一声「星瀑 / 终焉棱镜 / 蜂后」
+        /// 是玩家一路升级的奖励感，只写「脉冲 LV5」是把这层反馈抹平了。
+        /// </summary>
+        public static readonly string[][] LineAliases =
+        {
+            new[] { "脉冲炮", "双联脉冲", "三叉星流", "四象阵列", "星瀑" },
+            new[] { "棱镜", "双棱", "棱镜矩阵", "裂光", "终焉棱镜" },
+            new[] { "蜂群", "双子蜂", "三蜂", "五蜂", "蜂后" },
+        };
+
+        public static string WeaponName(string id, int level)
+        {
+            int row = id == "prism" ? 1 : id == "swarm" ? 2 : 0;
+            return LineAliases[row][Mathf.Clamp(level, 1, 5) - 1];
         }
 
         // 棱镜：单发威力 / 贯穿数 / 对巨构加成（entities.js:910-921）
@@ -169,6 +188,10 @@ namespace AuroraRift
         public const float BulletLifetime = 4f;
         public const int MaxEnemiesAlive = 42;
         public const int MaxEnemyBullets = 420;
+        public const float MineDrag = 3.8f;          // 水雷速度按 exp(-3.8×dt) 衰减到停住
+        public const float MineBurstSpeedPx = 128f;  // 破片初速 = 128 + 星区×2
+        public const float WavePhaseRate = 7.2f;     // 波动弹的相位频率
+        public const float PlasmaBurstSpeedPx = 105f;
 
         // ---- 敌机（entities.js:1210-1233,1265-1268,1481-1493）----
         public const float EnemyHpPerSector = 0.16f;       // hp ×(1+(s-1)*0.16)
@@ -194,10 +217,53 @@ namespace AuroraRift
         public const float EntryTopInsetPx = 10f;
         public const float EntryBottomFrac = 0.94f;
 
+        // ---- 敌机判定与运动（entities.js:1263-1341）----
+        public const float EnemyCollisionSizePx = 0.78f;   // 判定半径 = size × 0.78，美术仍按 size
+        public const float EnemyChargeEliteMul = 0.8f;     // 精英蓄力更短
+        public const float ArmoredSizeMul = 1.06f;
+        public const float ArmoredFireMul = 1.12f;         // 装甲机射得更「慢」
+        public const float EnemyLifeSeconds = 16f;         // 悬停/环绕机 16 秒后离场
+        public const float HoverLeaveSpeedPx = 170f;
+        public const float OrbitLeaveSpeedPx = 160f;
+        public const float StrafeDropSpeedPx = 120f;
+        public const float DiveSlowSpeedPx = 40f;          // 宽限期内的慢速下落
+        public const float DiveSpeedMul = 1.5f;            // 锁定玩家后速度 ×1.5
+        public const float HoverSpanPx = 88f;              // 驻留横向摆幅
+        public const float HoverBulwarkSpanPx = 55f;
+        public const float HoverSecondAmpPx = 20f;         // 叠一层慢速 sin(t*0.23)
+        public const float HoverBobPx = 8f;
+        public const float ApproachWobblePx = 12f;         // 进场时 x 微摆
+        public const float OrbitRadiusPx = 62f;
+        public const float OrbitRadiusYPx = 24f;
+        public const float OrbitRate = 1.15f;
+        public const float StrafeBobPx = 16f;
+        public const float RockDriftPx = 12f;
+        public const float CarrierSummonEvery = 3.6f;
+        public const float CarrierShardlingChance = 0.55f;  // 其余是俯冲蜂
+        public const float CarrierBandTopFrac = 0.45f;      // 只在上半屏 45% 内召唤
+        public const float CarrierChildEntryDelay = 0.15f;
+        public const float SplitterChildHpFrac = 0.5f;      // 分裂幼体只有半血
+        // 导演独有增强（原版剧本不随机出精英）：想回到纯原版把这里改成 0
+        public const float RandomEliteChance = 0.18f;
+
         // ---- 连锁与计分（game.js:74-76,977-979,998-1021）----
         public const float ComboWindow = 2.8f;
         public const int ComboMaxMult = 8;
         public const int ComboStep = 5;
+
+        // ---- 打击停顿与慢镜（game.js:1015,1209,1257,1343,1382,1484）----
+        // 原版每次关键命中都会「钉」住世界几十毫秒，受创与星爆还会拖一段慢镜。
+        // 这一层不做，游戏摸起来就是「塑料」——数值对了但打不动人。
+        public const float FreezeKill = 0.025f;        // 精英/堡垒被击落
+        public const float FreezeHit = 0.05f;          // 护盾破、力场挡下致命一击、Boss 破防
+        public const float FreezePhase = 0.06f;        // Boss 换阶段
+        public const float FreezeDesperate = 0.08f;    // Boss 进临界
+        public const float FreezeNova = 0.1f;          // 星爆
+        public const float FreezeBossDie = 0.12f;      // Boss 崩解
+        public const float SlowHitDur = 0.3f, SlowHitScale = 0.5f;
+        public const float SlowNovaDur = 0.4f, SlowNovaScale = 0.45f;
+        public const float SlowDeathDur = 1.2f, SlowDeathScale = 0.28f;
+        public const float SlowBossDieDur = 1.4f, SlowBossDieScale = 0.35f;
 
         // ---- Boss（entities.js:1727-1793,1832,1880-1910,1940-1945,1975,2029-2040）----
         public const float BossHpSectorGrowth = 0.70f;
@@ -217,6 +283,31 @@ namespace AuroraRift
         public const float BossBulletSpeedPerTier = 46f;
         public static readonly float[] BossBulletSpeedDiv = { 1f, 1.06f, 1.18f };
 
+        // ---- Boss 出招节奏（entities.js:1945-1967,2444-2448）----
+        public static readonly float[] BossSpellCd = { 0.85f, 0.62f, 0.42f };  // 一/二/三阶段间隔
+        public const float BossSpellCdFloor = 0.3f;
+        public const float BossChainCd = 0.16f;              // 三阶段链招几乎不停
+        public const int BossChainEveryTier0 = 4;            // 一档密度每 4 招连锁一次
+        public const int BossChainEveryOtherTier = 3;
+        public const float BossInitialCd = 1.15f;
+        public const float BossPostBreakCd = 0.55f;          // 破防结束立刻补一招
+        public const float BossDesperateCd = 0.45f;          // 临界起手间隔
+        public const float BossDesperateFrac = 0.12f;        // 血量低于 12% 进临界
+        public const float BossDesperateRingNormal = 0.45f;  // 三阶段收招后追加免费环的概率
+        public const float BossDesperateRingOtherTier = 0.65f;
+        public const float BossDesperateRingHard = 0.7f;     // 临界时
+        public const float BossDesperateRingHardest = 0.9f;
+        public const int BossFreeRingNormal = 16;
+        public const int BossFreeRingDesperate = 22;
+        public const float BossFreeRingSpeedMul = 0.75f;
+        public const float BossContactRx = 0.85f;            // 接触椭圆 = size×0.85 + 8
+        public const float BossContactRy = 0.70f;            // size×0.70 + 8
+        public const float BossContactPadPx = 8f;
+        public const float BossHitRx = 1.02f;                // 玩家弹判定椭圆 = size×1.02 / ×0.82
+        public const float BossHitRy = 0.82f;
+        public const float BossWarnSeconds = 3.0f;           // game.js:1297 预警 3.0 秒并清场
+        public const float SectorClearSeconds = 4.4f;        // game.js:1416 通关幕间
+
         // ---- 击破结算（game.js:1395-1400）----
         public const float ClearTimeBonusBase = 90f;
         public const float ClearTimeBonusPerSecond = 40f;
@@ -225,6 +316,8 @@ namespace AuroraRift
         public const float ClearGrazePerHit = 20f;
         public const float ClearBaseScore = 4000f;
         public const float ClearBasePerSector = 900f;
+        // Unity 独有增强：每星区通关额外补偿 500×(区号+1)，现在显式列进结算面板
+        public const float SectorCompensationPerZone = 500f;
 
         // ---- 评级（ui.js:555-557）----
         public const int GradeS = 120000, GradeA = 60000, GradeB = 22000;
@@ -236,7 +329,7 @@ namespace AuroraRift
         // 挂点（原版像素，y 向下）：1 架 (-64,8)；2 架 (±64,8)；3 架 (-68,2)/(68,2)/(0,48)
         public static readonly Vector2[] DroneSlots2A = { new Vector2(-64, 8), new Vector2(64, 8) };
         public static readonly Vector2[] DroneSlots3 = { new Vector2(-68, 2), new Vector2(68, 2), new Vector2(0, 48) };
-        public const float AegisPdInterval = 0.7f;
+        public const float AegisPdInterval = 0.5f;   // 原版 pdT = 0.5（game.js:794），环视觉与点防同拍
         public const float AegisPdRadiusPx = 38f;
         public static readonly float AegisPdRadius = AegisPdRadiusPx * Px;
         public const int AegisPdClearCount = 4;
