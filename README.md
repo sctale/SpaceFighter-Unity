@@ -3,23 +3,27 @@
 把网页版《太空战斗机 · Aurora Rift》用 Unity 6 重做的竖屏弹幕射击。Android APK 优先，桌面版用于快速验证与截图。
 
 <p>
-  <img src="docs/shots/unity_menu_v017.png" width="290" alt="开始界面" />
-  <img src="docs/shots/android_v017_play.png" width="290" alt="战斗 HUD" />
-  <img src="artgen/icon_preview.png" width="290" alt="应用图标" />
+  <img src="docs/shots/android_v018_play.png" width="290" alt="战斗 HUD" />
+  <img src="docs/shots/android_v018_menu.png" width="290" alt="开始界面" />
+  <img src="docs/shots/android_v018_pause.png" width="290" alt="暂停页" />
 </p>
 
 ## 这一版的重点
 
-- **界面按网页版重做（v0.17.0）**：开始菜单（品牌菱形 + 大标题 + 特性胶囊 + 战绩卡 + 难度三选 +
-  渐变主按钮 + 六条操作提示）、战斗 HUD（SCORE/SECTOR 题头、连锁盒、THREAT Boss 卡、
-  底部仪表带 + 三枚动作环）、暂停页与结算页，版式与配色都对着 `web/www/css/game.css` 做。
-- **游戏流程对齐**：星区开场 / WARNING / Boss 登场 / PHASE / CORE BREAK / OVERLOAD /
-  HULL BREACH / SIGNAL LOST 全部走网页版那套公告模型；清场后先亮 2.4 秒预警再入场。
-- **难度对齐**：敌机弹速 `min(300, 150×(1+tier×0.14))`、扇形/环爆/散射/重弹/针弹/水雷/波动弹/
-  母舰的弹数、角度、速度逐条照 `entities.js` 抄；航母每 2.6~3.6 秒召唤。
-- **特性对齐网页版 v2.8.4**：像素比例（画布 540 宽）、视口边界、星区剧本、Boss 光束与分时出招、
-  开局配置、掉落与保底、界面四层与动作环热区，全部按 `web/www/js/` 源码逐条抄，
-  并由 `VerifyNumbers` 281 条数值断言守住。
+- **手感对齐网页版（v0.18.0）**：修掉三个真 bug——蓄能按帧扣（pulse LV1 实际掉电 53/s
+  而不是 7.4/s，两秒打空、长期失谐）、换线不清停留计时（共鸣可以连按刷满）、
+  通关分重复计算；并补上原版的打击停顿与慢镜。
+- **Boss 招式模型重做**：换成原版攻击状态机（0.5 秒预告 → 按时刻分节拍 → 按阶段间隔收招），
+  22 招逐条照 `entities.js:2076-2432` 重写，三台 Boss 的阶段序列与「背板」顺序、出招间隔
+  0.85/0.62/0.42 秒 + 链招 0.16 秒、弹速阶段系数、椭圆判定、破防与临界全部对齐。
+- **关卡平衡对齐**：敌机判定 `size×0.78`、弹道线段扫掠命中、俯冲锁定玩家 ×1.5 速、
+  悬停/环绕机 16 秒离场、分裂幼体半血、母舰 55/45 混编、水雷真减速+引信+10 破片、
+  通关必掉箱与 4.4 秒幕间、时间奖励按整区用时。
+- **界面排列按原版实测值**：页边距、顶/底渐变带（真渐变不是硬边）、Boss 面板内缩、
+  仪表带五件套互不挤压、公告与提示位置、结算页单卡垂直居中、武器名按等级换叫法。
+- **可回归的数值门禁**：`VerifyNumbers` **425 条**断言，其中一组是**行为断言**
+  （蓄能每秒掉电量、共鸣门槛四态、Boss 间隔纯函数、编辑态真建敌机量血量与判定半径）——
+  上一版只查常量，所以「常量对、代码没生效」的一类 bug 曾全绿通过。
 - **舰船美术全部独立绘制**：玩家三条武器线三套涂装、12 种敌机、3 类僚机、3 台 Boss、7 类弹体、补给箱；金属渐变、装甲倒角、面板刻线、自发光引擎，不再是几何占位图。
 - **3 台 Boss 各自独立**：Gatekeeper / Weaver / Helios，本体 + 旋转环 + 呼吸光环 + 核心辉光；受击只闪外圈，持续输出不会把机体洗成灰白。
 - **完整玩法**：三条武器线（蓄能 / 失谐 / 共鸣 / 换线）、擦弹与相位穿弹、冲刺、星爆 NOVA、棱镜力场、过载、三档难度、10 个星区、Boss 22 招、破防与临界、僚机编队、掉落保底。
@@ -31,7 +35,7 @@
 
 到 [Releases](https://github.com/sctale/SpaceFighter-Unity/releases/latest) 下载：
 
-- `AuroraRift-Unity-v0.17.0.apk`（Android Debug 签名，安装时允许“未知来源”即可）
+- `AuroraRift-Unity-v0.18.0.apk`（Android Debug 签名，安装时允许“未知来源”即可）
 
 桌面版：`Builds/Windows/SpaceFighter.exe`（Unity 构建产物，本地生成）。
 
@@ -58,7 +62,7 @@
 环境：Unity **6000.3.10f1**、Android SDK、NDK **27.2.12479018**、JDK 17（Unity 自带即可）。
 
 ```bash
-# 数值门禁（278 条断言，构建前必跑）
+# 数值门禁（425 条断言，构建前必跑）
 Unity.exe -batchmode -quit -projectPath <project> \
   -executeMethod AuroraRift.EditorTools.VerifyNumbers.Run
 

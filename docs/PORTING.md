@@ -31,7 +31,7 @@ Unity.exe -batchmode -quit -projectPath D:/V-Coding/space-fighter-unity \
 | `www/js/ui.js`（仪表带/HUD） | `UI/Hud.cs` + `UI/Controls.cs` | 已迁移（v0.16.0） |
 | `www/js/art.js`（程序化美术） | `artgen/gen_ships.py` → `Assets/Resources/Ships/*.png`，运行期由 `Visuals/ShipArt.cs` 载入 | 已替换（舰船/弹体/补给箱） |
 | `www/js/director.js`（波次/星区推进） | `Systems/Director.cs` | 已迁移（v0.16.0，剧本制） |
-| `.tools/design-test.js`（70 条数值断言） | `Assets/Editor/VerifyNumbers.cs`（278 条，已复刻并扩充） | 已迁移（v0.16.0） |
+| `.tools/design-test.js`（70 条数值断言） | `Assets/Editor/VerifyNumbers.cs`（425 条，已复刻并扩充） | 已迁移（v0.16.0） |
 
 ## 数值对齐（已从原版抄入 `GameConfig`）
 
@@ -72,7 +72,7 @@ Unity.exe -batchmode -quit -projectPath D:/V-Coding/space-fighter-unity \
 | **弹体/补给箱** | 7 类弹体精灵（追踪弹/重炮/水雷/针弹…）+ 4 类补给箱图标 | 实机截图 |
 | **安卓中文 HUD** | 随包带 Noto Sans CJK SC 子集（942 字形 / 274KB），修复 v0.14.0 安卓上 IMGUI 中文整段空白 | 模拟器实机截图 |
 
-门禁：`VerifyNumbers` **278 条断言全过**；构建：Windows + Android APK 均 CLI 产出并通过 `aapt2`/`apksigner` 校验。
+门禁：`VerifyNumbers` **425 条断言全过**；构建：Windows + Android APK 均 CLI 产出并通过 `aapt2`/`apksigner` 校验。
 
 ### v0.16.0 对标清单（网页版 v2.8.4）
 
