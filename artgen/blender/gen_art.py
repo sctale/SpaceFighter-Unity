@@ -241,7 +241,7 @@ def build_player_pulse(accent):
     hull = mat_pbr("hull_steel", (0.030, 0.040, 0.062), 0.95, 0.22)
     armor = mat_pbr("armor_plate", (0.060, 0.078, 0.110), 0.90, 0.32)
     dark = mat_pbr("frame", (0.012, 0.016, 0.026), 0.70, 0.55)
-    neon = mat_emit("neon", accent, 1.8)
+    neon = mat_emit("neon", accent, 1.35)
     glass = mat_pbr("canopy_glass", (0.010, 0.020, 0.030), 0.30, 0.03)
 
     objs = []
@@ -308,8 +308,8 @@ def build_boss_gatekeeper(accent):
     hull = mat_pbr("boss_hull", (0.040, 0.028, 0.045), 0.94, 0.24)
     armor = mat_pbr("boss_armor", (0.080, 0.052, 0.072), 0.90, 0.30)
     dark = mat_pbr("boss_frame", (0.022, 0.020, 0.030), 0.7, 0.5)
-    neon = mat_emit("boss_neon", accent, 1.9)
-    core = mat_emit("boss_core", (0.95, 0.42, 0.55), 1.7)
+    neon = mat_emit("boss_neon", accent, 1.35)
+    core = mat_emit("boss_core", (0.95, 0.30, 0.45), 1.10)
 
     objs = []
     # 主六边形（朝下的一角略长，形成"下颌"）
@@ -330,7 +330,7 @@ def build_boss_gatekeeper(accent):
     objs.append(cyl("core_seat", 0.24, 0.24, (0, 0, 0.02), dark, 24))
     objs.append(cyl("core_ring", 0.195, 0.26, (0, 0, 0.03), neon, 24, bevel=0.0))
     objs.append(cyl("core_lens", 0.135, 0.30, (0, 0, 0.04), core, 24, bevel=0.0))
-    objs.append(cyl("core_pin", 0.045, 0.34, (0, 0, 0.05), mat_emit("boss_core_pin", (1.0, 0.90, 0.94), 2.2), 16, bevel=0.0))
+    objs.append(cyl("core_pin", 0.045, 0.34, (0, 0, 0.05), mat_emit("boss_core_pin", (1.0, 0.85, 0.90), 1.30), 16, bevel=0.0))
 
     # 下颌（朝 -Y）
     objs.append(poly_prism("jaw", [(0.20, -0.42), (0.10, -0.80), (-0.10, -0.80), (-0.20, -0.42)],
@@ -345,7 +345,7 @@ def build_boss_gatekeeper(accent):
                         rot=(0, 0, a)))
 
     # ---- ring 层：外圈三段弧 + 六个光点，游戏里单独旋转 ----
-    ring_neon = mat_emit("boss_ring_neon", accent, 1.5)
+    ring_neon = mat_emit("boss_ring_neon", accent, 0.85)
     ring = []
     for k in range(3):
         a0 = k * 2 * math.pi / 3 + 0.12
@@ -371,11 +371,301 @@ def build_bullet_needle(accent):
     return objs, []
 
 
+# ================================================================= 批量：机体与 Boss
+# 12 种敌机 / 3 套玩家形态 / 3 台 Boss。敌机机头朝 -Y（游戏里向下），玩家与弹体朝 +Y。
+# 轮廓用简单多边形 + 少量细节块，保证：
+#   · 40-60px 下剪影可辨（这是弹幕游戏的第一需求）
+#   · 材质/布光/发光强度全走同一套，换图后风格统一
+
+def _mats(tag, base=(0.030, 0.040, 0.062), armor=(0.060, 0.078, 0.110)):
+    return (mat_pbr(tag + "_hull", base, 0.95, 0.22),
+            mat_pbr(tag + "_armor", armor, 0.90, 0.32),
+            mat_pbr(tag + "_dark", (0.012, 0.016, 0.026), 0.70, 0.55))
+
+
+def _octagon(r, squash=1.0, n=8, rot=0.0):
+    return [(math.cos(rot + i * 2 * math.pi / n) * r,
+             math.sin(rot + i * 2 * math.pi / n) * r * squash) for i in range(n)]
+
+
+ENEMY_SPECS = {
+    # 普通机群：小三角翼
+    "enemy_drifter": dict(accent="#FF6F91", body=[
+        ("poly", [(0, -0.95), (0.34, -0.25), (0.62, 0.42), (0.20, 0.30), (0.09, 0.62),
+                  (-0.09, 0.62), (-0.20, 0.30), (-0.62, 0.42), (-0.34, -0.25)], -0.05, 0.05, "hull"),
+        ("poly", [(0, -0.62), (0.20, -0.16), (0.30, 0.26), (-0.30, 0.26), (-0.20, -0.16)], 0.05, 0.075, "armor"),
+        ("poly", [(0.30, 0.34), (0.56, 0.40), (0.52, 0.30), (0.28, 0.26)], 0.03, 0.06, "neon"),
+        ("poly", [(-0.30, 0.34), (-0.56, 0.40), (-0.52, 0.30), (-0.28, 0.26)], 0.03, 0.06, "neon"),
+        ("cyl", 0.055, 0.10, (0, 0.58, 0.02), "dark"),
+    ]),
+    # 俯冲蜂：细长针形，后掠刺
+    "enemy_wasp": dict(accent="#FF9AB4", body=[
+        ("poly", [(0, -0.98), (0.13, -0.34), (0.52, 0.66), (0.16, 0.38), (0.07, 0.28),
+                  (-0.07, 0.28), (-0.16, 0.38), (-0.52, 0.66), (-0.13, -0.34)], -0.04, 0.04, "hull"),
+        ("poly", [(0, -0.80), (0.05, -0.10), (0.04, 0.46), (-0.04, 0.46), (-0.05, -0.10)],
+         -0.045, -0.038, "neon"),
+    ]),
+    # 扇形射手：宽箭头 + 两侧炮舱
+    "enemy_lancer": dict(accent="#A597FF", body=[
+        ("poly", [(0, -0.92), (0.24, -0.20), (0.80, 0.08), (0.74, 0.34), (0.28, 0.28),
+                  (0.11, 0.58), (-0.11, 0.58), (-0.28, 0.28), (-0.74, 0.34), (-0.80, 0.08),
+                  (-0.24, -0.20)], -0.05, 0.06, "hull"),
+        ("poly", [(0, -0.66), (0.14, -0.10), (0.20, 0.34), (-0.20, 0.34), (-0.14, -0.10)], 0.06, 0.09, "armor"),
+        ("box", (0.13, 0.34, 0.09), (0.52, 0.06, 0.02), "dark", 0.008),
+        ("box", (0.13, 0.34, 0.09), (-0.52, 0.06, 0.02), "dark", 0.008),
+        ("box", (0.05, 0.20, 0.03), (0.52, -0.14, 0.09), "neon", 0.0),
+        ("box", (0.05, 0.20, 0.03), (-0.52, -0.14, 0.09), "neon", 0.0),
+    ]),
+    # 环状炮台：八边形 + 发光环
+    "enemy_orbiter": dict(accent="#9B8CFF", body=[
+        ("poly", _octagon(0.78, 0.92, 8, math.pi / 8), -0.06, 0.06, "hull"),
+        ("poly", _octagon(0.56, 0.92, 8, math.pi / 8), 0.06, 0.09, "armor"),
+        ("ring", 0.40, 0.50, 0.0, 2 * math.pi, 0.09, 0.105, "neon"),
+        ("cyl", 0.16, 0.14, (0, 0, 0.10), "dark"),
+        ("cyl", 0.10, 0.16, (0, 0, 0.12), "neon"),
+    ]),
+    # 分裂体：中央仓 + 两块可拆的侧体
+    "enemy_splitter": dict(accent="#FF6F91", body=[
+        ("poly", [(0, -0.86), (0.28, -0.32), (0.32, 0.30), (0.15, 0.70), (-0.15, 0.70),
+                  (-0.32, 0.30), (-0.28, -0.32)], -0.05, 0.05, "hull"),
+        ("box", (0.30, 0.52, 0.10), (0.58, 0.16, 0.0), "armor", 0.012),
+        ("box", (0.30, 0.52, 0.10), (-0.58, 0.16, 0.0), "armor", 0.012),
+        ("box", (0.06, 0.34, 0.03), (0.58, 0.16, 0.06), "neon", 0.0),
+        ("box", (0.06, 0.34, 0.03), (-0.58, 0.16, 0.06), "neon", 0.0),
+        ("cyl", 0.10, 0.12, (0, -0.30, 0.08), "dark"),
+    ]),
+    # 重装堡垒：厚甲 + 双炮
+    "enemy_bulwark": dict(accent="#C3CBE0", body=[
+        ("poly", [(0, -0.70), (0.40, -0.50), (0.86, 0.10), (0.86, 0.60), (0.30, 0.80),
+                  (-0.30, 0.80), (-0.86, 0.60), (-0.86, 0.10), (-0.40, -0.50)], -0.07, 0.08, "hull"),
+        ("poly", [(0, -0.46), (0.28, -0.28), (0.60, 0.16), (0.60, 0.52), (-0.60, 0.52),
+                  (-0.60, 0.16), (-0.28, -0.28)], 0.08, 0.12, "armor"),
+        ("box", (0.16, 0.44, 0.12), (0.40, -0.42, 0.02), "dark", 0.010),
+        ("box", (0.16, 0.44, 0.12), (-0.40, -0.42, 0.02), "dark", 0.010),
+        ("box", (0.07, 0.26, 0.03), (0.40, -0.60, 0.10), "neon", 0.0),
+        ("box", (0.07, 0.26, 0.03), (-0.40, -0.60, 0.10), "neon", 0.0),
+    ]),
+    # 陨石：不规则岩块
+    "enemy_rock": dict(accent="#AAB6CC", body=[
+        ("poly", [(0.10, -0.92), (0.55, -0.52), (0.84, 0.06), (0.62, 0.62), (0.16, 0.86),
+                  (-0.30, 0.80), (-0.74, 0.44), (-0.86, -0.10), (-0.48, -0.62), (-0.12, -0.86)],
+         -0.16, 0.14, "hull"),
+        ("poly", [(0.24, -0.40), (0.42, 0.02), (0.24, 0.38), (-0.10, 0.30), (-0.22, -0.06),
+                  (-0.02, -0.36)], 0.14, 0.20, "armor"),
+    ]),
+    # 长炮狙击：长轨 + 瞄具
+    "enemy_sniper": dict(accent="#69F5DC", body=[
+        ("poly", [(0, -0.98), (0.14, -0.54), (0.22, 0.30), (0.44, 0.62), (0.20, 0.74),
+                  (-0.20, 0.74), (-0.44, 0.62), (-0.22, 0.30), (-0.14, -0.54)], -0.05, 0.05, "hull"),
+        ("box", (0.07, 0.62, 0.06), (0, 0.10, 0.075), "armor", 0.006),
+        ("box", (0.035, 0.56, 0.02), (0, 0.10, 0.105), "neon", 0.0),
+        ("cyl", 0.09, 0.10, (0, 0.44, 0.09), "dark"),
+        ("box", (0.42, 0.10, 0.06), (0, 0.56, 0.02), "armor", 0.006),
+    ]),
+    # 布雷者：圆胖机体 + 两侧雷舱
+    "enemy_minekeeper": dict(accent="#FFD27A", body=[
+        ("poly", _octagon(0.66, 1.0, 10, math.pi / 10), -0.07, 0.07, "hull"),
+        ("poly", _octagon(0.44, 1.0, 10, math.pi / 10), 0.07, 0.10, "armor"),
+        ("ring", 0.30, 0.38, 0.0, 2 * math.pi, 0.10, 0.115, "neon"),
+        ("cyl", 0.20, 0.30, (0.60, 0.10, 0.0), "dark"),
+        ("cyl", 0.20, 0.30, (-0.60, 0.10, 0.0), "dark"),
+        ("cyl", 0.13, 0.32, (0.60, 0.10, 0.01), "neon"),
+        ("cyl", 0.13, 0.32, (-0.60, 0.10, 0.01), "neon"),
+    ]),
+    # 侧掠弯刀：不对称刀锋
+    "enemy_sidewinder": dict(accent="#9B8CFF", body=[
+        ("poly", [(0.10, -0.90), (0.30, -0.20), (0.92, 0.55), (0.62, 0.74), (0.10, 0.26),
+                  (-0.10, 0.42), (-0.26, 0.68), (-0.42, 0.44), (-0.20, -0.20)], -0.05, 0.05, "hull"),
+        ("poly", [(0.26, -0.30), (0.60, 0.34), (0.44, 0.44), (0.16, -0.10)], 0.05, 0.075, "armor"),
+        ("poly", [(0.34, -0.16), (0.76, 0.46), (0.70, 0.50), (0.28, -0.14)], 0.02, 0.045, "neon"),
+    ]),
+    # 召唤母舰：大块舰体 + 机库口 + 侧鳍
+    "enemy_carrier": dict(accent="#8FA4C9", body=[
+        ("poly", [(0, -0.66), (0.32, -0.66), (0.36, -0.10), (0.94, 0.16), (0.94, 0.56),
+                  (0.40, 0.68), (-0.40, 0.68), (-0.94, 0.56), (-0.94, 0.16), (-0.36, -0.10),
+                  (-0.32, -0.66)], -0.08, 0.08, "hull"),
+        ("poly", [(0, -0.50), (0.26, -0.50), (0.30, 0.10), (0.66, 0.26), (-0.66, 0.26),
+                  (-0.30, 0.10), (-0.26, -0.50)], 0.08, 0.12, "armor"),
+        ("box", (0.34, 0.14, 0.03), (0, -0.56, 0.09), "neon", 0.0),
+        ("box", (0.10, 0.40, 0.03), (0.70, 0.40, 0.09), "neon", 0.0),
+        ("box", (0.10, 0.40, 0.03), (-0.70, 0.40, 0.09), "neon", 0.0),
+        ("cyl", 0.14, 0.12, (0, 0.30, 0.14), "dark"),
+    ]),
+    # 分裂幼体：小碎片
+    "enemy_shardling": dict(accent="#FF9AB4", body=[
+        ("poly", [(0, -0.92), (0.40, 0.0), (0.16, 0.80), (-0.16, 0.80), (-0.40, 0.0)],
+         -0.04, 0.04, "hull"),
+        ("poly", [(0, -0.60), (0.06, -0.10), (0, 0.30), (-0.06, -0.10)], -0.045, -0.038, "neon"),
+    ]),
+}
+
+
+def build_from_spec(name, spec):
+    # 敌机在游戏里只有 16-38px，比玩家机更依赖"提亮"：暗装甲缩到 20px 会糊成黑块
+    hull, armor, dark = _mats(name, (0.062, 0.082, 0.118), (0.105, 0.128, 0.170))
+    neon = mat_emit(name + "_neon", hex_rgb(spec["accent"]), 1.35)
+    table = {"hull": hull, "armor": armor, "dark": dark, "neon": neon}
+    objs = []
+    for i, part in enumerate(spec["body"]):
+        kind = part[0]
+        if kind == "poly":
+            _, pts, z0, z1, mat = part
+            objs.append(poly_prism(f"{name}_p{i}", pts, z0, z1, table[mat],
+                                   0.014 if mat != "neon" else 0.0))
+        elif kind == "box":
+            _, size, loc, mat, bev = part
+            objs.append(box(f"{name}_b{i}", size, loc, table[mat], bev))
+        elif kind == "cyl":
+            _, r, d, loc, mat = part[:5]
+            rot = part[5] if len(part) > 5 else (0, 0, 0)
+            objs.append(cyl(f"{name}_c{i}", r, d, loc, table[mat], 20, rot=rot))
+        elif kind == "ring":
+            _, r0, r1, a0, a1, z0, z1, mat = part
+            objs.append(arc_ring(f"{name}_r{i}", r0, r1, a0, a1, z0, z1, table[mat], seg=28, bevel=0.0))
+    return objs, []
+
+
+
+def flip_180(objs):
+    """绕世界 Z 轴 180°：玩家机轮廓若按敌机朝向写的，用它翻正（对称机体等价于镜像）。"""
+    for ob in objs:
+        ob.location = (-ob.location.x, -ob.location.y, ob.location.z)
+        ob.rotation_euler = (ob.rotation_euler.x, ob.rotation_euler.y,
+                             ob.rotation_euler.z + math.pi)
+    return objs
+
+def build_player_prism(accent):
+    """棱镜线：宽人字翼 + 长枪机头（单发重击的身份）。"""
+    hull, armor, dark = _mats("prism_player")
+    neon = mat_emit("prism_neon", accent, 1.35)
+    glass = mat_pbr("prism_glass", (0.010, 0.020, 0.030), 0.30, 0.03)
+    objs = [poly_prism("spine", [(0, -0.98), (0.07, -0.40), (0.10, 0.20), (0.07, 0.56),
+                                 (0, 0.72), (-0.07, 0.56), (-0.10, 0.20), (-0.07, -0.40)],
+                       -0.05, 0.06, hull, 0.014)]
+
+    def wing(sign):
+        return poly_prism("wing", [(sign * 0.08, -0.30), (sign * 0.26, -0.62), (sign * 0.92, 0.52),
+                                   (sign * 0.66, 0.72), (sign * 0.30, 0.28), (sign * 0.10, 0.34)],
+                          -0.03, 0.03, hull, 0.014)
+
+    def plate(sign):
+        return poly_prism("plate", [(sign * 0.16, -0.40), (sign * 0.32, -0.48), (sign * 0.72, 0.44),
+                                    (sign * 0.58, 0.52), (sign * 0.30, 0.16)], 0.03, 0.055, armor, 0.008)
+
+    def edge(sign):
+        return poly_prism("edge", [(sign * 0.30, -0.60), (sign * 0.86, 0.48), (sign * 0.80, 0.52),
+                                   (sign * 0.26, -0.56)], 0.015, 0.035, neon, 0.0)
+
+    objs += mirrored(wing) + mirrored(plate) + mirrored(edge)
+    objs.append(poly_prism("lance", [(0, -0.99), (0.035, -0.55), (-0.035, -0.55)], -0.048, -0.040, neon, 0.0))
+    objs.append(poly_prism("canopy", _octagon(0.07, 1.9, 12), 0.06, 0.10, glass, 0.010))
+    for sx in (-1, 1):
+        objs.append(box("nozzle", (0.06, 0.14, 0.05), (sx * 0.05, 0.62, 0.05), neon, 0.0))
+    return flip_180(objs), []
+
+
+def build_player_swarm(accent):
+    """蜂群线：双引擎舱 + 导弹巢（多弹散射的身份）。"""
+    hull, armor, dark = _mats("swarm_player")
+    neon = mat_emit("swarm_neon", accent, 1.35)
+    glass = mat_pbr("swarm_glass", (0.010, 0.020, 0.030), 0.30, 0.03)
+    objs = [poly_prism("spine", [(0, -0.92), (0.10, -0.30), (0.13, 0.24), (0.10, 0.60),
+                                 (0, 0.74), (-0.10, 0.60), (-0.13, 0.24), (-0.10, -0.30)],
+                       -0.05, 0.06, hull, 0.014)]
+
+    def nacelle(sign):
+        out = [poly_prism("nacelle", [(sign * 0.20, -0.62), (sign * 0.46, -0.30), (sign * 0.52, 0.34),
+                                      (sign * 0.40, 0.62), (sign * 0.20, 0.50), (sign * 0.18, 0.0)],
+                          -0.06, 0.05, hull, 0.014)]
+        out.append(poly_prism("nacelle_neon", [(sign * 0.44, -0.24), (sign * 0.49, 0.30),
+                                               (sign * 0.45, 0.30), (sign * 0.40, -0.24)],
+                              0.05, 0.070, neon, 0.0))
+        out.append(cyl("pod", 0.055, 0.22, (sign * 0.33, 0.10, 0.07), dark, 12))
+        return out
+
+    objs += _flat(mirrored(nacelle))
+    objs.append(poly_prism("canopy", _octagon(0.06, 1.8, 12), 0.06, 0.10, glass, 0.010))
+    for sx in (-1, 1):
+        for i in range(3):
+            objs.append(cyl("missile", 0.018, 0.10, (sx * 0.33, -0.02 + i * 0.11, 0.085), neon, 8))
+    return flip_180(objs), []
+
+
+def build_boss_weaver(accent):
+    """织星者：两把长刀翼 + 细长脊柱，紫色。"""
+    hull, armor, dark = _mats("weaver_boss", (0.038, 0.030, 0.058), (0.070, 0.056, 0.105))
+    neon = mat_emit("weaver_neon", accent, 1.35)
+    core = mat_emit("weaver_core", (0.62, 0.50, 1.0), 1.05)
+    objs = [poly_prism("spine", [(0, -0.86), (0.14, -0.40), (0.18, 0.30), (0.10, 0.78),
+                                 (-0.10, 0.78), (-0.18, 0.30), (-0.14, -0.40)],
+                       -0.07, 0.09, hull, 0.018)]
+
+    def blade(sign):
+        return poly_prism("blade", [(sign * 0.12, -0.30), (sign * 0.44, -0.74), (sign * 1.00, -0.06),
+                                    (sign * 0.96, 0.26), (sign * 0.40, -0.10), (sign * 0.16, 0.10)],
+                          -0.05, 0.04, hull, 0.016)
+
+    def blade_neon(sign):
+        return poly_prism("blade_neon", [(sign * 0.46, -0.66), (sign * 0.94, -0.04),
+                                         (sign * 0.92, 0.10), (sign * 0.42, -0.56)], 0.04, 0.055, neon, 0.0)
+
+    objs += mirrored(blade) + mirrored(blade_neon)
+    objs.append(cyl("core_seat", 0.20, 0.22, (0, 0.10, 0.02), dark, 24))
+    objs.append(cyl("core_lens", 0.13, 0.26, (0, 0.10, 0.04), core, 24, bevel=0.0))
+    for sx in (-1, 1):
+        objs.append(cyl("eye", 0.05, 0.08, (sx * 0.30, -0.34, 0.06), neon, 12, bevel=0.0))
+    ring = []
+    ring_mat = mat_emit("weaver_ring", accent, 0.85)
+    for k in range(4):
+        a0 = k * math.pi / 2 + 0.10
+        ring.append(arc_ring("ring_arc", 0.80, 0.86, a0, a0 + 1.15, -0.02, 0.03, ring_mat))
+    return objs, ring
+
+
+def build_boss_helios(accent):
+    """新星核心：同心环 + 四根尖刺 + 亮核，金色。"""
+    hull, armor, dark = _mats("helios_boss", (0.050, 0.042, 0.026), (0.090, 0.074, 0.040))
+    neon = mat_emit("helios_neon", accent, 1.35)
+    core = mat_emit("helios_core", (1.0, 0.78, 0.35), 1.10)
+    objs = [poly_prism("disc", _octagon(0.74, 1.0, 16), -0.07, 0.08, hull, 0.02),
+            poly_prism("disc_top", _octagon(0.50, 1.0, 16), 0.08, 0.11, armor, 0.012)]
+    for i in range(4):
+        a = i * math.pi / 2 + math.pi / 4
+        objs.append(box("spike", (0.16, 0.52, 0.10),
+                        (math.cos(a) * 0.62, math.sin(a) * 0.62, 0.02), armor, 0.012,
+                        rot=(0, 0, a - math.pi / 2)))
+        objs.append(box("spike_neon", (0.05, 0.34, 0.02),
+                        (math.cos(a) * 0.70, math.sin(a) * 0.70, 0.075), neon, 0.0,
+                        rot=(0, 0, a - math.pi / 2)))
+    objs.append(cyl("core_seat", 0.22, 0.24, (0, 0, 0.02), dark, 24))
+    objs.append(arc_ring("core_ring", 0.15, 0.22, 0, 2 * math.pi, 0.10, 0.13, neon, seg=32, bevel=0.0))
+    objs.append(cyl("core_lens", 0.14, 0.30, (0, 0, 0.06), core, 24, bevel=0.0))
+    ring = []
+    ring_mat = mat_emit("helios_ring", accent, 0.85)
+    for k in range(3):
+        a0 = k * 2 * math.pi / 3
+        ring.append(arc_ring("ring_arc", 0.84, 0.90, a0, a0 + 1.7, -0.02, 0.03, ring_mat))
+    return objs, ring
+
+
+def _enemy_builder(asset):
+    return lambda accent: build_from_spec(asset, ENEMY_SPECS[asset])
+
+
 MODELS = {
+    # 玩家三线（512）
     "player_pulse": (build_player_pulse, 512, "#35E0C8"),
+    "player_prism": (build_player_prism, 512, "#FF5C8A"),
+    "player_swarm": (build_player_swarm, 512, "#FFC24B"),
+    # 三台 Boss（640，另有 _ring 层）
     "boss_gatekeeper": (build_boss_gatekeeper, 640, "#FF6F91"),
+    "boss_weaver": (build_boss_weaver, 640, "#9B8CFF"),
+    "boss_helios": (build_boss_helios, 640, "#FFD27A"),
+    # 弹体（96）
     "bullet_enemy_needle": (build_bullet_needle, 96, "#8CF7EA"),
 }
+for _k in ENEMY_SPECS:
+    MODELS[_k] = (_enemy_builder(_k), 384, ENEMY_SPECS[_k]["accent"])
 
 
 # ----------------------------------------------------------------- 归一化与渲染
@@ -465,6 +755,29 @@ def fit_to_contract(objs, out_dir, name, preview=160):
     os.remove(tmp)
     print("FIT", name, "r=%.3f k=%.3f" % (r_view, k))
 
+
+
+def bake_glow(path, tint, radius_frac=0.026, strength=0.55, lift=0.08):
+    """
+    把一圈同色低透明外发光烘进 PNG：旧手绘图的"存在感"主要来自这圈光。
+    alpha 上限压到 0.45，check_art 用 >0.5 判轮廓时不会被光晕带偏，
+    机体仍然是 0.46 的外接半径。
+    """
+    from PIL import Image, ImageFilter
+    im = Image.open(path).convert("RGBA")
+    w, h = im.size
+    a = im.getchannel("A")
+    r, g, b, _ = im.split()
+    if lift > 0:
+        f = lambda v: min(255, int(v + 255 * lift))
+        r, g, b = r.point(f), g.point(f), b.point(f)
+    body = Image.merge("RGBA", (r, g, b, a))
+    rad = max(2, int(w * radius_frac))
+    blur = a.filter(ImageFilter.GaussianBlur(rad))
+    cap = int(0.45 * 255 * strength / 0.55)
+    glow = Image.new("RGBA", im.size, (tint[0], tint[1], tint[2], 0))
+    glow.putalpha(blur.point(lambda v: min(cap, int(v * strength))))
+    Image.alpha_composite(glow, body).save(path)
 
 def render_asset(name, out_dir, samples):
     builder, canvas, hexaccent = MODELS[name]

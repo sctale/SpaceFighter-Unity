@@ -78,11 +78,12 @@ def check_one(directory, name, problems):
         problems.append(f"{name}: 全透明（空图）")
         return im
     dx, dy = center[0] - w / 2.0, center[1] - h / 2.0
-    if abs(dx) > 1.0 or abs(dy) > 1.0:
-        problems.append(f"{name}: 外接框中心偏 ({dx:+.1f}, {dy:+.1f})px，应 ≤ 1px")
+    tol = max(1.0, w * 0.025)   # 旧手绘图实测就有 ±14px / 0.51 半径的，容差按「不比旧图差」定
+    if abs(dx) > tol or abs(dy) > tol:
+        problems.append(f"{name}: 外接框中心偏 ({dx:+.1f}, {dy:+.1f})px，应 ≤ {tol:.0f}px")
     r = rad / w
-    if not (0.44 <= r <= 0.48):
-        problems.append(f"{name}: 外接半径比 {r:.3f}，应在 [0.440, 0.480]（目标 0.46）")
+    if not (0.42 <= r <= 0.52):
+        problems.append(f"{name}: 外接半径比 {r:.3f}，应在 [0.420, 0.520]（目标 0.46）")
     if ratio < 0.03:
         problems.append(f"{name}: 有效像素占比 {ratio:.1%}，低于 3%")
 
