@@ -333,7 +333,7 @@ namespace AuroraRift
             }
 
             Txt(_tiny, Center(w, RefH - bottom - 24f, 900f, 24f),
-                Sp("v0.19.4") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
+                Sp("v0.19.5") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
         }
 
         /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
@@ -390,19 +390,25 @@ namespace AuroraRift
             var dir = Director.Instance;
 
             // 顶/底渐变压暗：.hud::before 高 136px、::after 高 118px，两端都是渐隐不是硬边
+            // 敌机会从顶栏背后掠过，压暗不够就会"把分数盖住"（用户反馈两次）：
+            // 顶带不透明度提到 0.72，并给顶部留 12px 最小安全边（刘海机不贴边）。
+            float topPad = Mathf.Max(top, 24f);
             var prev = GUI.color;
-            GUI.color = new Color(0.016f, 0.024f, 0.059f, 0.55f);
-            GUI.DrawTexture(R(0, 0, w, 136f * 2f + top), UiKit.VeilTop);
+            GUI.color = new Color(0.016f, 0.024f, 0.059f, 0.72f);
+            GUI.DrawTexture(R(0, 0, w, 136f * 2f + topPad), UiKit.VeilTop);
             GUI.color = new Color(0.016f, 0.024f, 0.059f, 0.62f);
             GUI.DrawTexture(R(0, RefH - bottom - 118f * 2f, w, 118f * 2f + bottom), UiKit.VeilBottom);
             GUI.color = prev;
 
             // ---- 左上：分数块（eyebrow 18.4 / 数字 31.4 / BEST 58.2 / GRAZE 71.2）----
-            Txt(Label(18, Muted, TextAnchor.UpperLeft), R(pad, top + 36.8f, 420f, 22f), Sp("SCORE"), Muted);
-            Bold(_numBig, R(pad, top + 62.8f, 460f, 52f), Mathf.RoundToInt(root.Score).ToString("N0"), Paper, 2f);
+            // 分数块下面垫一层很淡的底板：无论后面飞过什么，这四行始终可读
+            UiKit.Panel(R(pad - 10f, topPad + 20f, 300f, 176f),
+                new Color(0.008f, 0.012f, 0.032f, 0.34f), Line(0.06f), 12f);
+            Txt(Label(18, Muted, TextAnchor.UpperLeft), R(pad, topPad + 36.8f, 420f, 22f), Sp("SCORE"), Muted);
+            Bold(_numBig, R(pad, topPad + 62.8f, 460f, 52f), Mathf.RoundToInt(root.Score).ToString("N0"), Paper, 2f);
             // BEST/GRAZE 跟着数字的实测字高走，换字号时不会再压行
             float numH = _numBig.CalcSize(new GUIContent("0")).y;
-            float bestY = top + 66.8f + numH;
+            float bestY = topPad + 66.8f + numH;
             Txt(_tiny, R(pad, bestY, 300f, 20f), "BEST ", Dimc);
             Txt(_small, R(pad + 58f, bestY - 3f, 300f, 22f), root.Best.ToString("N0"), new Color(Gold.r, Gold.g, Gold.b, 0.85f));
             Txt(_tiny, R(pad, bestY + 26f, 300f, 18f), "GRAZE ", Dimc);
@@ -411,9 +417,9 @@ namespace AuroraRift
             // ---- 中上：星区（eyebrow 19.4 / 数字 31.4 / 区名 50.4）----
             if (dir != null)
             {
-                Txt(Label(18, TealDim, TextAnchor.MiddleCenter), R(w * 0.5f - 220f, top + 38.8f, 440f, 22f), Sp("SECTOR"), TealDim);
-                Bold(_num, R(w * 0.5f - 220f, top + 62.8f, 440f, 40f), dir.Zone.ToString("00"), Teal, 1.6f);
-                Txt(Label(19, Dimc, TextAnchor.MiddleCenter), R(w * 0.5f - 220f, top + 100.8f, 440f, 24f),
+                Txt(Label(18, TealDim, TextAnchor.MiddleCenter), R(w * 0.5f - 220f, topPad + 38.8f, 440f, 22f), Sp("SECTOR"), TealDim);
+                Bold(_num, R(w * 0.5f - 220f, topPad + 62.8f, 440f, 40f), dir.Zone.ToString("00"), Teal, 1.6f);
+                Txt(Label(19, Dimc, TextAnchor.MiddleCenter), R(w * 0.5f - 220f, topPad + 100.8f, 440f, 24f),
                     dir.ZoneName, Muted);
             }
 
@@ -427,7 +433,7 @@ namespace AuroraRift
             if (root.Combo > 0)
             {
                 float bx = w - pad - 170f;
-                float by = top + (dir != null && dir.Boss != null ? 176.4f * 2f : 92.4f * 2f);
+                float by = topPad + (dir != null && dir.Boss != null ? 176.4f * 2f : 92.4f * 2f);
                 Txt(Label(54, Gold, TextAnchor.MiddleRight), R(bx, by, 170f, 64f), "×" + root.Multiplier, Gold);
                 Txt(Label(16, Dimc, TextAnchor.MiddleRight), R(bx, by + 62f, 170f, 22f), "CHAIN " + root.Combo, Muted);
                 var track = R(bx + 38f, by + 78f, 132f, 4f);

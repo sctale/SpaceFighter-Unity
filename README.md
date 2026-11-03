@@ -3,7 +3,7 @@
 把网页版《太空战斗机 · Aurora Rift》用 Unity 6 重做的竖屏弹幕射击。Android APK 优先，桌面版用于快速验证与截图。
 
 <p>
-  <img src="docs/shots/android_v0194_play.png" width="290" alt="战斗 HUD（Blender 重制机体与弹体）" />
+  <img src="docs/shots/android_v0195_play.png" width="290" alt="战斗 HUD（Blender 重制机体与弹体）" />
   <img src="artgen/icon_preview.png" width="290" alt="应用图标（3D 玩家机）" />
   <img src="docs/shots/art_pilot_compare.jpg" width="290" alt="旧手绘 / 纯 3D / 3D+外发光" />
 </p>
@@ -40,7 +40,7 @@
 
 到 [Releases](https://github.com/sctale/SpaceFighter-Unity/releases/latest) 下载：
 
-- `AuroraRift-Unity-v0.19.4.apk`（Android Debug 签名，安装时允许“未知来源”即可）
+- `AuroraRift-Unity-v0.19.5.apk`（Android Debug 签名，安装时允许“未知来源”即可）
 
 桌面版：`Builds/Windows/SpaceFighter.exe`（Unity 构建产物，本地生成）。
 

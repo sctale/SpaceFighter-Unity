@@ -541,6 +541,11 @@ namespace AuroraRift.EditorTools
             Check("beh.bossCd.chainOther", BossController.SpellCooldown(2, 1, 3, false), 0.16f);
             Check("beh.bossCd.desperate", BossController.SpellCooldown(2, 0, 1, true), 0.16f);
             // 破防期间不攒槽：否则持续输出会把 Boss 永久锁在眩晕里（v0.19.2 实测）
+            // 入场期不能吃伤害（原版 hit() 里 entering 直接 return）——否则玩家能把它"入场即秒"
+            CheckTrue("beh.bossEntering.invuln", !BossController.CanTakeDamage(true, false));
+            CheckTrue("beh.bossEntering.afterSeated", BossController.CanTakeDamage(false, false));
+            CheckTrue("beh.bossEntering.dying", !BossController.CanTakeDamage(false, true));
+
             CheckTrue("beh.bossBreak.frozenWhileStunned",
                       !BossController.BreakGaugeAccrues(stunned: true, broken: false));
             // 僚机种类：三个挂点要能凑出三种（v0.19.3 里 Bind 传 null 导致永远只有 gunner）

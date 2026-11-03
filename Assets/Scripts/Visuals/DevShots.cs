@@ -21,6 +21,9 @@ namespace AuroraRift
         string _tag;
         string _move;
         bool _probe;
+        bool _weaponApplied;
+        string _weapon;
+        string _lvl;
         bool _quit;
         float _probeT;
         float _quitAt = -1f;
@@ -58,6 +61,8 @@ namespace AuroraRift
             d._tag = Arg(args, "-tag") ?? ("zone" + (Arg(args, "-zone") ?? "1"));
             d._move = Arg(args, "-move");
             d._probe = Array.IndexOf(args, "-probe") >= 0;
+            d._weapon = Arg(args, "-weapon");
+            d._lvl = Arg(args, "-lvl");
             d._quit = Array.IndexOf(args, "-quit") >= 0;
             Directory.CreateDirectory(d._dir);
         }
@@ -93,6 +98,17 @@ namespace AuroraRift
                           " director=" + (Director.Instance != null));
             }
 
+            if (!_weaponApplied && !string.IsNullOrEmpty(_weapon) && _clock > 3.4f &&
+                GameRoot.Instance != null && GameRoot.Instance.Player != null)
+            {
+                var player = GameRoot.Instance.Player;
+                if (_weapon != "pulse") player.Weapons.GrantLine(_weapon);
+                player.Weapons.SwitchTo(_weapon);
+                if (int.TryParse(_lvl, out int wantLv) && wantLv > 0)
+                    player.Weapons.Active.Level = Mathf.Clamp(wantLv, 1, 5);
+                _weaponApplied = true;
+                Debug.Log("[AURORA-WEAPON] " + _weapon + " lv" + player.Weapons.Active.Level);
+            }
             if (_probe)
             {
                 _probeT += Time.unscaledDeltaTime;

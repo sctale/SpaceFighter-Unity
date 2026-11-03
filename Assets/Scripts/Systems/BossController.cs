@@ -1002,9 +1002,15 @@ namespace AuroraRift
             return new Vector2(v.x * c - v.y * s, v.x * s + v.y * c);
         }
 
+        /// <summary>入场（还没降到悬停点）期间不该吃伤害——原版 hit() 里 entering 直接 return。</summary>
+        public bool Entering => transform.position.y > _anchor.y + 0.01f;
+
+        /// <summary>结算入口的可受伤判定（纯函数，门禁可断言）。</summary>
+        public static bool CanTakeDamage(bool entering, bool dying) => !entering && !dying;
+
         public void TakeDamage(float dmg)
         {
-            if (_dead) return;
+            if (!CanTakeDamage(Entering, _dead)) return;
             _flashT = 0.07f;
             float mul = _stun > 0f ? GameConfig.BossBreakDamageMul : 1f;
             Hp -= dmg * mul;

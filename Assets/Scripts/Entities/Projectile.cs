@@ -42,6 +42,12 @@ namespace AuroraRift
         /// <summary>上一帧位置，命中判定用线段扫掠（原版 prevX/prevY）。</summary>
         public Vector2 PrevPos;
 
+        /// <summary>
+        /// 这颗弹是否已经打过 Boss。穿透弹（棱镜）会在 Boss 体内停留好几帧，
+        /// 没有这个标记就会每帧结算一次——实测 prism L5 能在 1.5 秒内把 400 血的 Boss 打空。
+        /// </summary>
+        public bool HitBoss;
+
         /// <summary>擦弹与相位都要「每颗弹只记一次」，靠这两个标记去重。</summary>
         public bool Grazed;
         public bool Phased;
@@ -106,6 +112,7 @@ namespace AuroraRift
             Fuse = 0f;
             Wave = 0f;
             PrevPos = transform.position;
+            HitBoss = false;
             _seed = Random.value * 10f;
             _mineArmed = false;
             Homing = false;

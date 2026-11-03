@@ -494,14 +494,16 @@ namespace AuroraRift
                     }
                 }
 
-                if (Boss != null && b != null && b.gameObject.activeSelf)
+                if (Boss != null && b != null && b.gameObject.activeSelf && !Boss.Entering)
                 {
                     // 原版是椭圆（game.js:839-840）：rx = size×1.02 + 弹半径，ry = size×0.82 + 弹半径。
                     // 之前用固定半径 1.55 的圆，纵向比原版胖约 34 %，Boss 掉血明显偏快。
                     Vector2 d = (Vector2)b.transform.position - (Vector2)Boss.transform.position;
                     float rx = Boss.HitRx + b.Radius, ry = Boss.HitRy + b.Radius;
-                    if ((d.x * d.x) / (rx * rx) + (d.y * d.y) / (ry * ry) < 1f)
+                    if (!b.HitBoss && (d.x * d.x) / (rx * rx) + (d.y * d.y) / (ry * ry) < 1f)
                     {
+                        // 一颗弹对 Boss 只结算一次：穿透弹会在体内停好几帧，否则等于连击
+                        b.HitBoss = true;
                         float dmg = b.Damage * (b.BossBonus > 1f ? b.BossBonus : 1f);
                         Boss.TakeDamage(dmg);
                         if (root != null && root.Player != null) root.Player.AddNova(GameConfig.NovaOnHitBoss);

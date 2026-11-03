@@ -49,7 +49,9 @@ namespace AuroraRift
             for (int y = 0; y < H; y++)
             {
                 float k = y / (float)(H - 1);                 // Texture2D 的 y=0 在底部
-                float a = darkAtBottom ? k : 1f - k;
+                // 顶带要「上不透明、下透明」，底带相反。之前方向写反，
+                // 结果不是渐变而是一块边缘硬切的暗带（"把分数挡住"的元凶）。
+                float a = darkAtBottom ? 1f - k : k;
                 a = a * a * (3f - 2f * a);                    // 平滑折点，接近 CSS 的 55% 停点
                 var c = new Color(1f, 1f, 1f, a);
                 for (int x = 0; x < 2; x++) t.SetPixel(x, y, c);
