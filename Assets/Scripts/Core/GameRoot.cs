@@ -183,7 +183,9 @@ namespace AuroraRift
 
         public void RegisterPhase()
         {
-            Stats.Phases++;
+            // 原版相位穿越同时计入 grazes 与 sectorGrazes（game.js:882-884），
+            // 只记 phases 会让擦弹统计和通关擦弹奖励比原版少一截。
+            Stats.Phases++; Stats.Graze++; Stats.SectorGraze++;
             Score += GameConfig.PhaseScorePerBullet * Multiplier;
         }
 
@@ -221,7 +223,8 @@ namespace AuroraRift
         public void OnPlayerDead()
         {
             State = GameState.Dead;
-            Time.timeScale = 1f;      // 结算页要能点，不用 timeScale=0
+            // 结算页要能点：IMGUI 的点击不吃 timeScale，所以这里不再强推 timeScale = 1，
+            // 让死亡慢镜（1.2 秒 0.28 倍速）能播完再自己回到常速。
             if (Score > Best)
             {
                 Best = Mathf.RoundToInt(Score);
@@ -252,15 +255,48 @@ namespace AuroraRift
 
             if (State == GameState.Playing)
             {
-                Stats.Time += Time.unscaledDeltaTime;
-                TickCombo(Time.unscaledDeltaTime);
+                Stats.Time += Time.unscaledDeltaTime;      // 原版 runTime 走真实 dt（game.js:643）
+                TickCombo(Time.deltaTime);                  // 连锁走缩放 dt（game.js:754），慢镜时会一起放慢
                 TickHints();
             }
+            // 打击停顿/慢镜在游玩与死亡两段都要继续推进，否则死亡慢镜会被结算页截断
+            if (State == GameState.Playing || State == GameState.Dead)
+                TickTimeScale(Time.unscaledDeltaTime);
 
             if (Input.GetKeyDown(KeyCode.Escape) || Input.GetKeyDown(KeyCode.P)) TogglePause();
             if (State == GameState.Menu || State == GameState.Paused) TickMenuKeys();
 
             if (State == GameState.Dead && (Input.GetKeyDown(KeyCode.R))) Restart();
+        }
+
+        // ---- 打击停顿 / 慢镜（game.js:631-639）----
+        float _freeze, _slowT, _slowScale = 1f;
+
+        /// <summary>命中瞬间把世界钉住几十毫秒，让「打到了」被看见。</summary>
+        public void Hitstop(float seconds) { _freeze = Mathf.Max(_freeze, seconds); }
+
+        /// <summary>慢镜：只有比当前剩余时间更长的请求才能改强度（原版同款规则）。</summary>
+        public void Slowmo(float duration, float scale)
+        {
+            if (duration >= _slowT) _slowScale = scale;
+            _slowT = Mathf.Max(_slowT, duration);
+        }
+
+        void TickTimeScale(float realDt)
+        {
+            if (_freeze > 0f)
+            {
+                _freeze -= realDt;
+                Time.timeScale = 0f;
+                return;
+            }
+            float want = _slowT > 0f ? _slowScale : 1f;
+            if (_slowT > 0f) _slowT -= realDt;
+            // 停顿刚结束时直接落到目标速度：原版 freeze 只是跳过世界更新，
+            // 不会在停顿之后再拖一段「慢慢恢复」的慢镜。
+            if (Time.timeScale <= 0.0001f) { Time.timeScale = want; return; }
+            Time.timeScale = Mathf.Lerp(Time.timeScale, want,
+                1f - Mathf.Exp(-(want < 1f ? 9f : 7f) * realDt));
         }
 
         void TickCombo(float dt)

@@ -28,15 +28,18 @@ namespace AuroraRift
         /// <summary>原版「5 关一档弹幕强度」：tier = min(3, floor((s-1)/5))。</summary>
         public int DensityTier => Mathf.Min(3, (Zone - 1) / 5);
 
-        float _supplyTimer, _clearTimer, _railProgress, _bossWarn;
+        float _supplyTimer, _clearTimer, _railProgress, _bossWarn, _clearHold;
         int _pityWeapon, _pityDrone;
+
+        /// <summary>本星区开始时刻（Stats.Time 秒）。原版通关时间奖励按整个星区用时算。</summary>
+        public float SectorStartTime { get; private set; }
 
         // ------------------------------------------------------------ 星区剧本
         // 原版 director.js 的模型：一个星区 = 一段固定剧本（buildScript），
         // 逐条到点触发 → 剧本放完进入 clearing（清场）→ 才出 Boss。
         // 之前 Unity 版是"随机编队 + 杀满 N 只进下一波、三波后出 Boss"，
         // 节奏和敌机构成都和原版对不上，这里改成剧本驱动。
-        public enum RunState { Idle, Waves, Clearing, Boss }
+        public enum RunState { Idle, Waves, Clearing, Boss, Intermission }
         public RunState State { get; private set; } = RunState.Idle;
 
         class Step { public float after; public System.Action run; }
@@ -58,6 +61,7 @@ namespace AuroraRift
             RunState.Waves => Mathf.Min(0.9f, (_script.Count > 0 ? (float)_scriptIndex / _script.Count : 0f) * 0.86f),
             RunState.Clearing => 0.96f,
             RunState.Boss => 1f,
+            RunState.Intermission => 1f,
             _ => _railProgress,
         };
 
@@ -118,6 +122,8 @@ namespace AuroraRift
             State = RunState.Waves;
             ZoneProgress = 0f;
             _railProgress = 0f;
+            _clearHold = 0f;
+            SectorStartTime = GameRoot.Instance != null ? GameRoot.Instance.Stats.Time : 0f;
             if (Zone == 1) { _pityWeapon = 0; _pityDrone = 0; }
         }
 
@@ -289,20 +295,28 @@ namespace AuroraRift
                     }
                 }
 
-                // 周期补给：20 秒一箱（越往后越紧）
+                // 周期补给：首箱 20 秒，之后固定 19 秒一箱（director.js:298-303）
                 _supplyTimer -= dt;
                 if (_supplyTimer <= 0f)
                 {
-                    _supplyTimer = Mathf.Max(GameConfig.SupplyIntervalMin, GameConfig.SupplyInterval - Zone * 0.2f);
+                    _supplyTimer = GameConfig.SupplyIntervalMin;
                     CollectSupply();
                 }
+            }
+            else if (State == RunState.Intermission)
+            {
+                // 通关幕间 4.4 秒（game.js:1416）：这段时间是留给玩家收箱子的，不推进剧本
+                _clearHold -= dt;
+                if (_clearHold <= 0f) AdvanceSector();
             }
             else if (State == RunState.Clearing)
             {
                 // 清场：全灭且至少 1 秒才出 Boss，最多等 9.5 秒（防止有飞机卡住不放行）
                 TickPending(dt);
                 _clearTimer += dt;
-                // 原版 startBossWarning：先亮 2.4 秒 WARNING，巨构才入场
+                // 原版 startBossWarning(3.0)：亮 3 秒 WARNING，同时把残敌与敌弹全部清掉，
+                // Boss 战从干净盘面开始（game.js:1297-1313）。之前只亮公告 2.4 秒、不清场，
+                // 残余编队和 Boss 弹幕叠在一起，密度比原版高一截。
                 if (_bossWarn > 0f)
                 {
                     _bossWarn -= dt;
@@ -310,8 +324,10 @@ namespace AuroraRift
                 }
                 else if ((_enemies.Count == 0 && _clearTimer > 1.0f) || _clearTimer > 9.5f)
                 {
-                    _bossWarn = 2.4f;
-                    GameRoot.Instance?.Announce("WARNING", "巨构信号接近 // MASSIVE SIGNAL", 2.6f, true);
+                    _bossWarn = GameConfig.BossWarnSeconds;
+                    for (int i = _enemies.Count - 1; i >= 0; i--) Despawn(_enemies[i]);
+                    GameRoot.Instance?.ClearEnemyBullets(false);
+                    GameRoot.Instance?.Announce("WARNING", "巨构信号接近 // MASSIVE SIGNAL", 2.7f, true);
                     AudioDirector.Instance?.PlayWarn();
                 }
             }
@@ -397,6 +413,10 @@ namespace AuroraRift
         }
 
         /// <summary>精英由星区门槛决定（原版 director.js：bulwark s≥5、lancer s≥7、orbiter s≥4）。</summary>
+        /// <summary>
+        /// Unity 独有增强：原版剧本之外不随机出精英（director.js 只在指定条目传 elite:true）。
+        /// 想回到纯原版节奏，把 GameConfig.RandomEliteChance 改成 0 即可。
+        /// </summary>
         bool EliteFor(EnemyKind kind)
         {
             if (kind == EnemyKind.Rock || kind == EnemyKind.Shardling) return false;
@@ -408,7 +428,7 @@ namespace AuroraRift
                 EnemyKind.Carrier => 8,
                 _ => 6,
             };
-            return Zone >= gate && Random.value < 0.18f;
+            return Zone >= gate && Random.value < GameConfig.RandomEliteChance;
         }
 
         float ClampX(float x) => Mathf.Clamp(x, -GameView.MoveHalfWidth + 0.4f, GameView.MoveHalfWidth - 0.4f);
@@ -424,14 +444,23 @@ namespace AuroraRift
             _enemies.Add(e);
         }
 
-        public void SpawnShardling(Vector2 pos)
+        public void SpawnShardling(Vector2 pos) => SpawnChild(EnemyKind.Shardling, pos, 1f, -1f);
+
+        /// <summary>Boss 的「母舰召唤」：按当前星区放小兵，入场宽限用默认值（原版 {sector} 传参）。</summary>
+        public void SpawnEscort(EnemyKind kind, Vector2 pos) => SpawnChild(kind, pos, 1f, -1f);
+
+        /// <summary>
+        /// 子系统出生（母舰放的小机、分裂体拆出的幼体）：可以指定血量比例与入场宽限。
+        /// 原版 spawnEnemy(...) 之后直接改 child.hp / child.entryDelay（game.js:1034-1042）。
+        /// </summary>
+        public void SpawnChild(EnemyKind kind, Vector2 pos, float hpFrac = 1f, float entryDelay = -1f)
         {
             if (_enemies.Count >= GameConfig.MaxEnemiesAlive) return;
-            var go = new GameObject("Enemy_Shardling");
+            var go = new GameObject("Enemy_" + kind);
             go.transform.SetParent(_root, false);
-            go.transform.position = pos + Vector2.down * 0.2f;
+            go.transform.position = new Vector3(ClampX(pos.x), pos.y, 0f);
             var e = go.AddComponent<EnemyShip>();
-            e.Setup(EnemyKind.Shardling, Zone, Diff, false);
+            e.Setup(kind, Zone, Diff, false, hpFrac, entryDelay);
             _enemies.Add(e);
         }
 
@@ -467,7 +496,11 @@ namespace AuroraRift
 
                 if (Boss != null && b != null && b.gameObject.activeSelf)
                 {
-                    if (Vector2.Distance(b.transform.position, Boss.transform.position) <= b.Radius + Boss.HitRadius)
+                    // 原版是椭圆（game.js:839-840）：rx = size×1.02 + 弹半径，ry = size×0.82 + 弹半径。
+                    // 之前用固定半径 1.55 的圆，纵向比原版胖约 34 %，Boss 掉血明显偏快。
+                    Vector2 d = (Vector2)b.transform.position - (Vector2)Boss.transform.position;
+                    float rx = Boss.HitRx + b.Radius, ry = Boss.HitRy + b.Radius;
+                    if ((d.x * d.x) / (rx * rx) + (d.y * d.y) / (ry * ry) < 1f)
                     {
                         float dmg = b.Damage * (b.BossBonus > 1f ? b.BossBonus : 1f);
                         Boss.TakeDamage(dmg);
@@ -483,7 +516,8 @@ namespace AuroraRift
         {
             var p = GameRoot.Instance?.Player;
             if (p == null || !p.Alive || p.Invuln > 0f || p.Dashing) return;
-            Vector2 me = p.transform.position;
+            // 原版的接触判定中心比机身低 2px（player.y + 2，画布 y 向下）
+            Vector2 me = (Vector2)p.transform.position - Vector2.up * (2f * GameConfig.Px);
 
             for (int i = _enemies.Count - 1; i >= 0; i--)
             {
@@ -500,8 +534,8 @@ namespace AuroraRift
 
             if (Boss != null && !Boss.Dying)
             {
-                // 原版：rx = size*0.85 + 8，ry = size*0.7 + 8（size≈76px）
-                float rx = 72f * GameConfig.Px, ry = 61f * GameConfig.Px;
+                // 原版：rx = size×0.85 + 8，ry = size×0.7 + 8，三台 size 分别 76/80/82
+                float rx = Boss.ContactRx, ry = Boss.ContactRy;
                 Vector2 d = (Vector2)Boss.transform.position - me;
                 if ((d.x * d.x) / (rx * rx) + ((d.y - 2f * GameConfig.Px) * (d.y - 2f * GameConfig.Px)) / (ry * ry) < 1f)
                     p.TakeHit();
@@ -517,6 +551,8 @@ namespace AuroraRift
             {
                 root.RegisterKill();
                 int points = root.AddKilledScore(e.Score);
+                // 精英/堡垒被击落时钉 25ms（game.js:1015）——大目标要有「被打穿」的顿挫
+                if (e.Elite || e.Kind == EnemyKind.Bulwark) root.Hitstop(GameConfig.FreezeKill);
                 if (root.Player != null)
                 {
                     root.Player.AddNova(e.Elite ? GameConfig.NovaOnEliteKill : GameConfig.NovaOnKill);
@@ -543,6 +579,16 @@ namespace AuroraRift
                     SpawnCrate((Vector3)(Vector2)e.transform.position + new Vector3(
                         Random.Range(-20, 20) * GameConfig.Px, Random.Range(-10, 10) * GameConfig.Px, 0f),
                     CrateKind.Gem);
+                return;
+            }
+            // 陨石不进掉落表：80 % 概率直接撒 2 颗宝石（game.js:1047-1053）
+            if (e.Kind == EnemyKind.Rock)
+            {
+                if (Random.value < 0.8f)
+                    for (int i = 0; i < 2; i++)
+                        SpawnCrate((Vector2)e.transform.position + new Vector2(
+                            Random.Range(-10f, 10f) * GameConfig.Px,
+                            Random.Range(-8f, 8f) * GameConfig.Px), CrateKind.Gem);
                 return;
             }
             if (Random.value > e.Def.DropChance) return;
@@ -577,17 +623,19 @@ namespace AuroraRift
         {
             var p = GameRoot.Instance.Player;
             bool missingWeapon = !p.Weapons.Prism.Unlocked || !p.Weapons.Swarm.Unlocked;
-            if (p.Weapons.Active.Level < 3) return CrateKind.WeaponLevel;
-            if (missingWeapon && (_pityWeapon >= GameConfig.PityThreshold || Random.value < 0.35f))
+            // Unity 独有保底：连着 3 次没掉到缺的武器线/僚机就必补（原版这个函数里没有 pity 分支）
+            if (missingWeapon && _pityWeapon >= GameConfig.PityThreshold)
                 return !p.Weapons.Prism.Unlocked ? CrateKind.Prism : CrateKind.Swarm;
             if (p.DroneCount < GameConfig.MaxDrones && _pityDrone >= GameConfig.PityThreshold) return CrateKind.Drone;
+            // 以下逐条对齐 game.js:1078-1085（原版门槛是 level<5 且 40 %，不是 level<3 无条件）
+            if (p.Weapons.Active.Level < 5 && Random.value < 0.4f) return CrateKind.WeaponLevel;
             if (p.Shields < GameConfig.MaxShields && Random.value < 0.45f) return CrateKind.Shield;
+            if (p.DroneCount < GameConfig.MaxDrones && Random.value < 0.55f) return CrateKind.Drone;
+            if (!p.Weapons.Prism.Unlocked && Random.value < 0.4f) return CrateKind.Prism;
+            if (!p.Weapons.Swarm.Unlocked && Random.value < 0.4f) return CrateKind.Swarm;
             if (Random.value < 0.45f) return Random.value < 0.5f ? CrateKind.Prism : CrateKind.Reflect;
-            float r = Random.value;
-            if (r < 0.25f) return CrateKind.WeaponLevel;
-            if (r < 0.5f) return CrateKind.Prism;
-            if (r < 0.75f) return CrateKind.Shield;
-            return CrateKind.Life;
+            CrateKind[] pool = { CrateKind.WeaponLevel, CrateKind.Prism, CrateKind.Shield, CrateKind.Life };
+            return pool[Random.Range(0, pool.Length)];
         }
 
         /// <summary>周期补给（director.js collectSupply），含换线箱与两条保底计数。</summary>
@@ -636,13 +684,6 @@ namespace AuroraRift
             else SpawnCrate(new Vector3(x, GameView.SpawnY + 0.2f), type);
         }
 
-        void ForceSwapCrate()
-        {
-            var p = GameRoot.Instance?.Player;
-            if (p == null || p.Weapons.UnlockedCount() < 2) return;
-            SpawnCrate(new Vector3(Random.Range(-0.6f, 0.6f), GameView.SpawnY), CrateKind.Swap);
-        }
-
         static CrateKind Weighted(float[] weights, CrateKind[] kinds)
         {
             float total = 0f;
@@ -681,22 +722,66 @@ namespace AuroraRift
         public void AdvanceZone() => StartSector(Zone + 1);
 
         /// <summary>
-        /// 原版 onBossDefeated：清 pending、回 idle，然后进下一个星区的剧本。
-        /// 通关奖励与"必掉换线箱"也挂在这里（对应旧版 BeginWave 里的那段）。
+        /// 原版 onBossDefeated（game.js:1392-1436）：结算已经在 Boss.Die() 里按原版公式加过，
+        /// 这里负责铺「通关必掉箱」、进 4.4 秒幕间，幕间结束才 advanceSector()。
+        /// 之前这里既立刻开下一星区（玩家没时间收箱子），又额外加了一遍 500×(Zone+1) 的分。
         /// </summary>
         public void OnBossDefeated()
         {
-            Boss = null;
-            _pending.Clear();
-            State = RunState.Idle;
+            State = RunState.Intermission;
+            _clearHold = GameConfig.SectorClearSeconds;
+            DeploySectorSalvage();
+        }
+
+        /// <summary>通关必掉（game.js:1420-1440）：升级 + 缺的武器线 + 护盾/反射 + 僚机/命 + 换线 + 5 宝石。</summary>
+        void DeploySectorSalvage()
+        {
             var root = GameRoot.Instance;
-            if (root != null)
+            var p = root != null ? root.Player : null;
+            if (p == null) return;
+
+            var loot = new List<CrateKind> { CrateKind.WeaponLevel };
+            loot.Add(!p.Weapons.Prism.Unlocked ? CrateKind.Prism
+                     : !p.Weapons.Swarm.Unlocked ? CrateKind.Swarm
+                     : CrateKind.WeaponLevel);
+            loot.Add(p.Shields >= 2 ? CrateKind.Reflect : CrateKind.Shield);
+            loot.Add(p.DroneCount < GameConfig.MaxDrones ? CrateKind.Drone : CrateKind.Life);
+            if (p.Weapons.UnlockedCount() >= 2) loot.Add(CrateKind.Swap);
+            if (p.Hull < 3) loot.Add(CrateKind.Life);
+
+            // 摆在玩家上方 240px；原版纵向夹在画布 [0.28H, 0.72H]，换算到 Unity 就是 ±0.44×半高
+            float px = p.transform.position.x;
+            float py = Mathf.Clamp(p.transform.position.y - 240f * GameConfig.Px,
+                                   -0.44f * GameView.HalfHeight, 0.44f * GameView.HalfHeight);
+            float gapPx = Mathf.Min(56f, (GameConfig.RefW - 96f) / Mathf.Max(1, loot.Count - 1));
+            float halfW = GameView.HalfWidth - 46f * GameConfig.Px;
+            for (int i = 0; i < loot.Count; i++)
             {
-                root.Stats.SectorGraze = 0;
-                root.Stats.SectorHits = 0;
-                root.AddScore(500f * (Zone + 1));
-                if (root.Player != null && root.Player.Weapons != null) ForceSwapCrate();
+                float off = (i - (loot.Count - 1) * 0.5f) * gapPx * GameConfig.Px;
+                float x = Mathf.Clamp(px + off, -halfW, halfW);
+                float arch = Mathf.Abs(i - (loot.Count - 1) * 0.5f) * 14f * GameConfig.Px;
+                SpawnCrate(new Vector3(x, py + arch, 0f), loot[i]);
             }
+            for (int i = 0; i < 5; i++)
+            {
+                float gx = Mathf.Clamp(px + Random.Range(-90f, 90f) * GameConfig.Px,
+                                       -GameView.HalfWidth + 30f * GameConfig.Px,
+                                       GameView.HalfWidth - 30f * GameConfig.Px);
+                SpawnCrate(new Vector3(gx, py + Random.Range(-40f, 20f) * GameConfig.Px, 0f), CrateKind.Gem);
+            }
+        }
+
+        /// <summary>原版 advanceSector（game.js:1452-1467）：清残留与弹幕、给 1.5 秒换区无敌，再开下一档剧本。</summary>
+        void AdvanceSector()
+        {
+            for (int i = _enemies.Count - 1; i >= 0; i--) Despawn(_enemies[i]);
+            _enemies.Clear();
+            _pending.Clear();
+            GameRoot.Instance?.ClearEnemyBullets(false);
+            BossLaser.ClearAll();
+            var p = GameRoot.Instance != null ? GameRoot.Instance.Player : null;
+            if (p != null) p.GrantInvulnZoneChange();
+            Boss = null;
             StartSector(Zone + 1);
         }
 

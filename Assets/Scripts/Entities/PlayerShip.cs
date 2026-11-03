@@ -13,7 +13,8 @@ namespace AuroraRift
         public int Hull = GameConfig.StartLives;
         public int Shields = GameConfig.StartShields;
         public float Nova;
-        public float Invuln;
+        /// <summary>无敌剩余秒数。出生就给原版那 1.6 秒（entities.js:388），不再用单独的 spawnGrace。</summary>
+        public float Invuln = GameConfig.InvulnOnSpawn;
         public float ReflectT;            // 棱镜力场（补给箱给的 8 秒，不是手动技能）
         public float Overdrive;           // 星爆后的超频窗口
         public float DashT, DashCd;
@@ -37,7 +38,6 @@ namespace AuroraRift
         int _fingerId = -1;
         Vector2 _lastMove = new Vector2(0f, -1f);
         float _swapIdle;
-        float _spawnGrace = GameConfig.SpawnGrace;
 
         void Awake()
         {
@@ -187,7 +187,6 @@ namespace AuroraRift
                 return;
             }
             float dt = Time.deltaTime;
-            if (_spawnGrace > 0f) _spawnGrace -= dt;
             if (Invuln > 0f) Invuln -= dt;
             if (DashCd > 0f) DashCd = Mathf.Max(0f, DashCd - dt);
             if (DashT > 0f) DashT -= dt;
@@ -210,6 +209,9 @@ namespace AuroraRift
         }
 
         public float SwapIdle => _swapIdle;
+
+        /// <summary>换线成功后由 WeaponSystem 调用：停留计时归零，下一次换线要重新攒够 1.2 秒。</summary>
+        public void ResetSwapIdle() { _swapIdle = 0f; }
 
         void ReadInput()
         {
@@ -263,6 +265,9 @@ namespace AuroraRift
                 if (Input.GetKeyDown(KeyCode.Alpha1)) Weapons.SwitchTo("pulse");
                 if (Input.GetKeyDown(KeyCode.Alpha2)) Weapons.SwitchTo("prism");
                 if (Input.GetKeyDown(KeyCode.Alpha3)) Weapons.SwitchTo("swarm");
+                // 原版 q/e/f 都映到同一个 weapon 动作 = 循环换线（core.js:114）
+                if (Input.GetKeyDown(KeyCode.Q) || Input.GetKeyDown(KeyCode.E)
+                    || Input.GetKeyDown(KeyCode.F)) Weapons.CycleWeapon();
                 // 与网页版一致：空格冲刺、X/J 星爆（不是空格）
                 if (Input.GetKeyDown(KeyCode.Space)) TryDash();
                 if (Input.GetKeyDown(KeyCode.X) || Input.GetKeyDown(KeyCode.J)) TryNova();
@@ -360,6 +365,9 @@ namespace AuroraRift
             Nova = 0f;
             Overdrive = GameConfig.OverdriveTime;
             Invuln = Mathf.Max(Invuln, GameConfig.InvulnAfterNova);
+            // 原版星爆：100ms 停顿 + 0.4 秒 0.45 倍速，清屏那一下要有「炸开再落地」的节奏
+            GameRoot.Instance?.Hitstop(GameConfig.FreezeNova);
+            GameRoot.Instance?.Slowmo(GameConfig.SlowNovaDur, GameConfig.SlowNovaScale);
             Director.Instance?.NovaBlast(transform.position);
         }
 
@@ -379,7 +387,7 @@ namespace AuroraRift
         void TickWeapons(float dt)
         {
             bool firing = Alive;
-            Weapons.Tick(dt, firing, _swapIdle);
+            Weapons.Tick(dt);
             if (firing) Weapons.TryFire();
             if (Weapons.ActiveId != _artLine) ApplyLineArt(Weapons.ActiveId);
         }
@@ -407,23 +415,48 @@ namespace AuroraRift
         {
             var pool = BulletPool.Instance;
             if (pool == null) return;
-            Vector2 me = transform.position;
+            // 原版的判定中心不是机身坐标，而是沿屏幕下方偏 2px（game.js:885/899/929）
+            Vector2 me = (Vector2)transform.position - Vector2.up * (2f * GameConfig.Px);
+            bool safe = Invuln > 0f;
+
+            // 相位：只有冲刺位移的那 0.17 秒里穿过弹幕才算（game.js:873）。
+            // 之前写的是「任何无敌帧」，等于受创 2.8 秒、星爆 0.9 秒、护盾 1.3 秒
+            // 都能站着刷星爆和分数，把擦弹经济整个吹走了。
+            if (DashT > 0f)
+            {
+                for (int i = pool.Active.Count - 1; i >= 0; i--)
+                {
+                    var b = pool.Active[i];
+                    if (b == null || b.Team != Team.Enemy || b.Phased) continue;
+                    if (Vector2.Distance(me, b.transform.position) <= GameConfig.PhaseRadius)
+                    {
+                        b.Phased = true;
+                        AddNova(GameConfig.PhaseNovaPerBullet);
+                        GameRoot.Instance?.RegisterPhase();
+                    }
+                }
+            }
+
+            if (safe) return;
 
             for (int i = pool.Active.Count - 1; i >= 0; i--)
             {
                 var b = pool.Active[i];
                 if (b == null || b.Team != Team.Enemy) continue;
-                float d = Vector2.Distance(me, b.transform.position);
 
-                // 相位：无敌帧里穿过的弹幕要给出回报，这是冲刺的价值
-                if ((Invuln > 0f || _spawnGrace > 0f) && d <= b.Radius + GameConfig.PhaseRadius && !b.Phased)
+                // 线段扫掠（原版 segClosest）：点位判定会让 330px/s 的针弹在低帧率下
+                // 从 4.6px 判定圈边上整颗穿过去，实测就是"明明贴着弹却不掉血"。
+                float d2 = SegClosestSq(b.PrevPos, b.transform.position, me);
+                float hitR = GameConfig.PlayerHitRadius + b.Radius;
+                float grazeR = GameConfig.PlayerGrazeRadius + b.Radius;
+
+                if (!b.Grazed && d2 < grazeR * grazeR && d2 > hitR * hitR)
                 {
-                    b.Phased = true;
-                    AddNova(GameConfig.PhaseNovaPerBullet);
-                    GameRoot.Instance?.RegisterPhase();
+                    b.Grazed = true;
+                    AddNova(GameConfig.NovaOnGraze);
+                    GameRoot.Instance?.RegisterGraze();
                 }
-
-                if (d <= b.Radius + GameConfig.PlayerHitRadius && Invuln <= 0f && _spawnGrace <= 0f)
+                else if (d2 < hitR * hitR)
                 {
                     // 先收掉这颗弹再结算受击：TakeHit 里的力场/复活会顺手清屏，
                     // 那之后 pool.Active 已经不是原来那个列表了（真机上就是这里
@@ -432,13 +465,18 @@ namespace AuroraRift
                     TakeHit();
                     return;
                 }
-                else if (d <= b.Radius + GameConfig.PlayerGrazeRadius && !b.Grazed && Invuln <= 0f)
-                {
-                    b.Grazed = true;
-                    AddNova(GameConfig.NovaOnGraze);
-                    GameRoot.Instance?.RegisterGraze();
-                }
             }
+        }
+
+        /// <summary>点到线段的最近距离平方（原版 game.js 的 segClosest）。</summary>
+        static float SegClosestSq(Vector2 a, Vector2 b, Vector2 p)
+        {
+            Vector2 ab = b - a;
+            float len2 = ab.sqrMagnitude;
+            if (len2 < 1e-9f) return (p - a).sqrMagnitude;
+            float t = Mathf.Clamp01(Vector2.Dot(p - a, ab) / len2);
+            Vector2 c = a + ab * t;
+            return (p - c).sqrMagnitude;
         }
 
         /// <summary>受击顺序：力场 → 护盾 → 舰体（与网页版 playerHit 一致）。</summary>
@@ -456,6 +494,7 @@ namespace AuroraRift
                 CameraShake.Instance?.Shake(0.16f, 0.24f);
                 Impact.Spawn(transform.position, new Color(1f, 0.82f, 0.48f, 0.95f), 0.9f, 0.3f);
                 root?.ClearEnemyBullets(true);
+                root?.Hitstop(GameConfig.FreezeHit);            // 原版这里钉 50ms
                 root?.Announce("FIELD", "棱镜力场 · 抵消一次致命", 1.4f);
                 return;
             }
@@ -467,6 +506,7 @@ namespace AuroraRift
                 AddNovaRaw(GameConfig.NovaOnShieldBreak);
                 CameraShake.Instance?.Shake(0.11f, 0.2f);
                 Impact.Spawn(transform.position, new Color(0.61f, 0.55f, 1f, 0.9f), 0.7f, 0.25f);
+                root?.Hitstop(GameConfig.FreezeHit);
                 return;
             }
 
@@ -479,8 +519,11 @@ namespace AuroraRift
             {
                 root.RegisterHullHit();
                 root.ClearEnemyBullets(true);
+                // 挨一发舰体重击要「慢下来给人看清」：0.3 秒 0.5 倍速 + 50ms 停顿（game.js:1257-1258）
+                root.Slowmo(GameConfig.SlowHitDur, GameConfig.SlowHitScale);
+                root.Hitstop(GameConfig.FreezeHit);
                 if (Hull > 0) root.Announce("HULL BREACH", "舰体受损 · 武器降级", 1.5f, true);
-                else root.Announce("SIGNAL LOST", "战机信号中断", 1.8f, true);
+                else { root.Slowmo(GameConfig.SlowDeathDur, GameConfig.SlowDeathScale); root.Announce("SIGNAL LOST", "战机信号中断", 1.8f, true); }
             }
             CameraShake.Instance?.Shake(0.24f, 0.34f);
             Impact.Spawn(transform.position, new Color(1f, 0.44f, 0.57f, 0.95f), 1.1f, 0.34f);

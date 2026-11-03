@@ -11,12 +11,17 @@ namespace AuroraRift
     public enum MovePattern { Sine, Dive, Hover, Orbit, Rock, Strafe }
     public enum FireMode { None, Aimed, Fan, Ring, Spread, Heavy, Needle, Mines, Wavefire, Carrier }
 
-    /// <summary>原版 ENEMY_TYPES 的 C# 版。像素值按 0.025 换算成世界单位（400px ≈ 10 单位）。</summary>
+    /// <summary>
+    /// 原版 ENEMY_TYPES 的 C# 版。像素值按 GameConfig.Px 换算成世界单位。
+    /// 注意 Radius 存的是「机体尺寸」（原版 def.size，美术与炮口都按它算）；
+    /// 判定半径另乘 GameConfig.EnemyCollisionSizePx = 0.78（entities.js:1263）。
+    /// </summary>
     public struct EnemyDef
     {
         public EnemyKind Kind;
         public string Label;
         public float Radius, Hp, Score, Speed, Amp, TargetY;
+        public float Charge;            // 开火前的蓄力预告秒数（原版只有狙击/布雷有）
         public MovePattern Move;
         public FireMode Fire;
         public float FireCdMin, FireCdMax;
@@ -37,8 +42,8 @@ namespace AuroraRift
             new EnemyDef { Kind = EnemyKind.Splitter,  Label = "分裂体",   Radius = 20*Px, Hp = 11, Score = 230, Speed = 64*Px,  Amp = 32*Px, Move = MovePattern.Sine,   Fire = FireMode.Spread,  FireCdMin = 1.8f, FireCdMax = 2.4f, DropChance = 0.20f, Tint = GameConfig.Hex("FF6F91") },
             new EnemyDef { Kind = EnemyKind.Bulwark,   Label = "重装堡垒", Radius = 30*Px, Hp = 46, Score = 520, Speed = 36*Px,  TargetY = 0.20f, Move = MovePattern.Hover, Fire = FireMode.Heavy, FireCdMin = 1.8f, FireCdMax = 2.5f, DropChance = 0.40f, Tint = GameConfig.Hex("C3CBE0") },
             new EnemyDef { Kind = EnemyKind.Rock,      Label = "陨石",     Radius = 23*Px, Hp = 14, Score = 70,  Speed = 48*Px,  Move = MovePattern.Rock,   Fire = FireMode.None,    FireCdMin = 0f,   FireCdMax = 0f,   DropChance = 0f,    Tint = GameConfig.Hex("AAB6CC") },
-            new EnemyDef { Kind = EnemyKind.Sniper,    Label = "长炮狙击", Radius = 22*Px, Hp = 20, Score = 320, Speed = 58*Px,  TargetY = 0.17f, Move = MovePattern.Hover, Fire = FireMode.Needle, FireCdMin = 1.6f, FireCdMax = 2.1f, DropChance = 0.24f, Tint = GameConfig.Hex("69F5DC") },
-            new EnemyDef { Kind = EnemyKind.Minekeeper,Label = "布雷者",   Radius = 24*Px, Hp = 28, Score = 380, Speed = 42*Px,  TargetY = 0.25f, Move = MovePattern.Hover, Fire = FireMode.Mines,  FireCdMin = 2.4f, FireCdMax = 3.1f, DropChance = 0.30f, Tint = GameConfig.Hex("FFD27A") },
+            new EnemyDef { Kind = EnemyKind.Sniper,    Label = "长炮狙击", Radius = 22*Px, Hp = 20, Score = 320, Speed = 58*Px,  TargetY = 0.17f, Move = MovePattern.Hover, Fire = FireMode.Needle, FireCdMin = 1.6f, FireCdMax = 2.1f, Charge = 0.55f, DropChance = 0.24f, Tint = GameConfig.Hex("69F5DC") },
+            new EnemyDef { Kind = EnemyKind.Minekeeper,Label = "布雷者",   Radius = 24*Px, Hp = 28, Score = 380, Speed = 42*Px,  TargetY = 0.25f, Move = MovePattern.Hover, Fire = FireMode.Mines,  FireCdMin = 2.4f, FireCdMax = 3.1f, Charge = 0.3f, DropChance = 0.30f, Tint = GameConfig.Hex("FFD27A") },
             new EnemyDef { Kind = EnemyKind.Sidewinder,Label = "侧掠弯刀", Radius = 21*Px, Hp = 17, Score = 310, Speed = 135*Px, TargetY = 0.33f, Move = MovePattern.Strafe, Fire = FireMode.Wavefire, FireCdMin = 1.25f, FireCdMax = 1.75f, DropChance = 0.22f, Tint = GameConfig.Hex("9B8CFF") },
             new EnemyDef { Kind = EnemyKind.Carrier,   Label = "召唤母舰", Radius = 34*Px, Hp = 78, Score = 680, Speed = 32*Px,  TargetY = 0.13f, Move = MovePattern.Hover, Fire = FireMode.Carrier, FireCdMin = 2.0f, FireCdMax = 2.6f, DropChance = 0.55f, Tint = GameConfig.Hex("8FA4C9") },
             new EnemyDef { Kind = EnemyKind.Shardling, Label = "分裂幼体", Radius = 13*Px, Hp = 5,  Score = 90,  Speed = 215*Px, Move = MovePattern.Dive,   Fire = FireMode.None,    FireCdMin = 0f,   FireCdMax = 0f,   DropChance = 0.03f, Tint = GameConfig.Hex("FF9AB4") },
