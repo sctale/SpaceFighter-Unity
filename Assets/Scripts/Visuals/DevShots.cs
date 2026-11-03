@@ -19,6 +19,7 @@ namespace AuroraRift
         bool _quitAfter;
         string _dir;
         string _tag;
+        string _move;
         float _quitAt = -1f;
         bool _startNextFrame;
         bool _shots;
@@ -52,6 +53,7 @@ namespace AuroraRift
             d._quitAfter = Array.IndexOf(args, "-autoshot") >= 0;
             d._dir = Path.Combine(Directory.GetCurrentDirectory(), "docs", "shots");
             d._tag = Arg(args, "-tag") ?? ("zone" + (Arg(args, "-zone") ?? "1"));
+            d._move = Arg(args, "-move");
             Directory.CreateDirectory(d._dir);
         }
 
@@ -92,8 +94,13 @@ namespace AuroraRift
                 if (boss != null)
                 {
                     _laserCast = true;
-                    boss.DebugCast(BossMove.LaserSweep);   // 内部再分时发出两条扫射光束
-                    Debug.Log("[AURORA-LASER] cast LaserSweep t=" + _clock.ToString("F1"));
+                    // -move <名字> 指定招式，逐招拍验收图（默认拍双生扫射，因为它同时验证光束）
+                    var mv = BossMove.Sweep;
+                    if (!string.IsNullOrEmpty(_move) &&
+                        System.Enum.TryParse<BossMove>(_move, true, out var parsed)) mv = parsed;
+                    boss.DebugCast(mv);
+                    Debug.Log("[AURORA-LASER] cast " + mv + " (" + BossMoves.Name(mv) +
+                              ") t=" + _clock.ToString("F1"));
                 }
             }
 

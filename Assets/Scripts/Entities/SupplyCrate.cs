@@ -114,15 +114,17 @@ namespace AuroraRift
                     else root?.AddScore(500);
                     break;
                 case CrateKind.Drone:
+                    // 原版满僚机时给 600 分（game.js:1170），不是 300
                     if (p.DroneCount < GameConfig.MaxDrones) { p.RestoreDrone(); root?.ShowToast("僚机归队"); }
-                    else root?.AddScore(300);
+                    else root?.AddScore(600);
                     break;
                 case CrateKind.Prism:
-                    p.Weapons.GrantLine("prism");
+                    // 已解锁且已满级时原版走 +1200 分支（game.js:1136-1139）
+                    if (!p.Weapons.GrantLine("prism")) root?.AddScore(1200);
                     root?.ShowToast("棱镜线解锁/升级");
                     break;
                 case CrateKind.Swarm:
-                    p.Weapons.GrantLine("swarm");
+                    if (!p.Weapons.GrantLine("swarm")) root?.AddScore(1200);
                     root?.ShowToast("蜂群线解锁/升级");
                     break;
                 case CrateKind.Reflect:
@@ -130,8 +132,9 @@ namespace AuroraRift
                     root?.ShowToast("PRISM FIELD 8s");
                     break;
                 case CrateKind.Life:
-                    p.Hull = Mathf.Min(5, p.Hull + 1);
-                    root?.ShowToast("舰体 +1");
+                    // 满命（5）时原版折成 1000 分（game.js:1183）
+                    if (p.Hull < 5) { p.Hull++; root?.ShowToast("舰体 +1"); }
+                    else root?.AddScore(1000);
                     break;
                 case CrateKind.Swap:
                     bool ok = p.Weapons.SwapToBest(30f);

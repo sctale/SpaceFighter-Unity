@@ -57,15 +57,31 @@ namespace AuroraRift
             return n;
         }
 
-        /// <summary>当前等级的射击间隔（秒）：等级曲线 × 超频 0.74 × 失谐 1.45。</summary>
-        public float FireInterval()
+        /// <summary>射击间隔（纯函数，门禁可不进游戏直接算）：等级曲线 × 超频 0.74 × 失谐 1.45。</summary>
+        public static float Interval(string id, int level, bool overdrive, bool detuned)
         {
-            var def = GameConfig.Line(ActiveId);
-            int lv = Mathf.Clamp(Active.Level, 1, 5);
-            float od = _owner != null && _owner.Overdrive > 0f ? GameConfig.OverdriveFireRateMul : 1f;
-            float det = Active.Detuned ? GameConfig.DetunedIntervalMul : 1f;
-            return def.FireRate[lv - 1] * od * det;
+            var def = GameConfig.Line(id);
+            int lv = Mathf.Clamp(level, 1, 5);
+            return def.FireRate[lv - 1] * (overdrive ? GameConfig.OverdriveFireRateMul : 1f)
+                                       * (detuned ? GameConfig.DetunedIntervalMul : 1f);
         }
+
+        /// <summary>当前等级的射击间隔（秒）：等级曲线 × 超频 0.74 × 失谐 1.45。</summary>
+        public float FireInterval() => Interval(ActiveId, Active.Level,
+            _owner != null && _owner.Overdrive > 0f, Active.Detuned);
+
+        /// <summary>
+        /// 每枪蓄能开销（纯函数）：drain × 本枪间隔 ×（只有一条线时 0.55）。
+        /// 要害在于「按枪扣」，所以每秒掉电量正好等于 drain；一旦写成按帧扣，
+        /// 60fps 下 pulse LV1 会从 7.4/s 变成 ~53/s，两秒打空、长期失谐。
+        /// </summary>
+        public static float ChargeCost(string id, int level, int unlockedCount, bool overdrive, bool detuned)
+            => GameConfig.Line(id).Drain * Interval(id, level, overdrive, detuned)
+               * (unlockedCount < 2 ? GameConfig.SoloDrainMul : 1f);
+
+        /// <summary>共鸣只在「停够 1.2 秒 + 目标线蓄能 ≥55 且未失谐」时叠一层。</summary>
+        public static bool ResonanceGain(bool wellTimed, float targetCharge, bool targetDetuned)
+            => wellTimed && targetCharge >= GameConfig.DetuneClearCharge && !targetDetuned;
 
         public float DamageMul()
         {
@@ -77,7 +93,7 @@ namespace AuroraRift
 
         int Calibrate(float baseDmg) => Mathf.Max(1, Mathf.RoundToInt(baseDmg * DamageMul()));
 
-        public void Tick(float dt, bool firing, float swapIdle)
+        public void Tick(float dt)
         {
             foreach (var l in _all)
             {
@@ -98,7 +114,9 @@ namespace AuroraRift
                 }
             }
 
-            if (firing && Active.Charge > 0f && !Active.Detuned) SpendCharge();
+            // 蓄能只在「开出一枪」时扣（原版 entities.js:965 在 shoot() 里调 spendCharge）。
+            // 这里以前每帧扣一次，等于按帧率把 drain 放大了 60 倍：
+            // pulse LV1 应该是 7.4/s，实际 ~53/s，两秒就打空并卡在失谐里，伤害长期 ×0.55。
 
             if (_resTimer > 0f)
             {
@@ -116,17 +134,21 @@ namespace AuroraRift
         void SpendCharge()
         {
             var w = Active;
-            var def = GameConfig.Line(w.Id);
-            float solo = UnlockedCount() < 2 ? GameConfig.SoloDrainMul : 1f;
-            // 原版：每开一枪扣 drain × 该枪的间隔（× 只有一条线时的 0.55）
-            w.Charge = Mathf.Max(0f, w.Charge - def.Drain * FireInterval() * solo);
+            // 排气中不再扣蓄能，否则会被一直钉在 0（原版 entities.js:504）
+            if (w.Detuned) return;
+            w.Charge = Mathf.Max(0f, w.Charge - ChargeCost(w.Id, w.Level, UnlockedCount(),
+                _owner != null && _owner.Overdrive > 0f, false));
             if (w.Charge <= 0.5f) w.Detuned = true;
         }
 
+        /// <summary>
+        /// 原版 autofire 只看 fireTimer 与 alive（entities.js:788-792），不看蓄能：
+        /// 打空的线照样开火，代价走 fireRate 的 ×1.45 慢循环与 damageMul 的 ×0.55。
+        /// 之前这里有一道 Charge &lt;= 0 就 return 的门，失谐期间直接停火，等于凭空多一层惩罚。
+        /// </summary>
         public void TryFire()
         {
-            var st = Active;
-            if (st.Charge <= 0f || FireCooldown > 0f) return;
+            if (FireCooldown > 0f) return;
             FireCooldown = FireInterval();
 
             Vector3 origin = _mount != null ? _mount.position : transform.position;
@@ -140,6 +162,7 @@ namespace AuroraRift
                 case "swarm": FireSwarm(origin); break;
                 default: FirePulse(origin); break;
             }
+            SpendCharge();
         }
 
         const float P = 0.0185185185f;   // GameConfig.Px（此处用常量便于写偏移）
@@ -232,6 +255,7 @@ namespace AuroraRift
                 var p = BulletPool.Instance.Spawn(Team.Player, pos, new Vector2(vx * P, sp),
                     Calibrate(baseDmg), 4f * P, def.Tint, "micro", 2.2f);
                 p.Homing = true;
+                p.HomingTime = GameConfig.SwarmHoming;   // 只追 1.45 秒，之后变直线弹
                 p.TurnRate = GameConfig.SwarmTurnRate;
                 p.HomingDelay = GameConfig.SwarmLockDelay;
                 p.HomingTarget = Director.Instance != null ? Director.Instance.NearestEnemy(pos) : null;
@@ -261,12 +285,17 @@ namespace AuroraRift
             var target = System.Array.Find(_all, l => l.Id == id);
             if (target == null || !target.Unlocked || id == ActiveId) return false;
 
+            // 原版先读停留时间、再立刻把计时清零（entities.js:546-549）。
+            // 之前只读不清，_swapIdle 一路累加，1.2 秒的共鸣门槛等于永远满足，
+            // 连按 1/2/3 就能把 5 层共鸣刷满——换线节奏的意义被抽空了。
+            bool wellTimed = _owner == null || _owner.SwapIdle >= GameConfig.SwapResonanceGap;
+            if (_owner != null) _owner.ResetSwapIdle();
+
             ActiveId = id;
             FireCooldown = Mathf.Min(FireCooldown, 0.07f);
 
             // 只有「停够时间 + 目标线健康」的换线才叠共鸣；乱按反而清零，避免刷链
-            bool wellTimed = _owner == null || _owner.SwapIdle >= GameConfig.SwapResonanceGap;
-            if (wellTimed && target.Charge >= GameConfig.DetuneClearCharge && !target.Detuned)
+            if (ResonanceGain(wellTimed, target.Charge, target.Detuned))
             {
                 Resonance = Mathf.Min(GameConfig.ResonanceMaxStacks, Resonance + 1f);
                 _resTimer = GameConfig.ResonanceWindow;

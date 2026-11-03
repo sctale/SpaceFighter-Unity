@@ -80,6 +80,10 @@ namespace AuroraRift
         {
             var line = GameConfig.Line(_owner.Weapons.ActiveId);
             Vector2 pos = transform.position;
+            // 原版 lean：僚机相对玩家的横向偏移换算成 0.18 以内的侧向分量，
+            // 让侧翼僚机的弹道自然张开（entities.js:827）。之前完全没算，僚机弹全直着走。
+            float lean = Mathf.Clamp((pos.x - _owner.transform.position.x) / (55f * GameConfig.Px),
+                                     -0.18f, 0.18f);
 
             if (Kind == "aegis")
             {
@@ -94,11 +98,13 @@ namespace AuroraRift
                 int n = Kind == "lance" ? 2 : 1;
                 for (int k = 0; k < n; k++)
                 {
-                    var p = BulletPool.Instance.Spawn(Team.Player, pos - new Vector2(0f, 5f * GameConfig.Px),
-                        new Vector2((k - (n - 1) * 0.5f) * 140f * GameConfig.Px, 700f * GameConfig.Px),
+                    float vx = (lean * 520f + (k - (n - 1) * 0.5f) * 140f) * GameConfig.Px;
+                    var p = BulletPool.Instance.Spawn(Team.Player, pos + new Vector2(0f, 5f * GameConfig.Px),
+                        new Vector2(vx, 700f * GameConfig.Px),
                         Mathf.Max(1, Mathf.Round(2 * _owner.Weapons.DamageMul())),
                         4f * GameConfig.Px, line.Tint, "micro", 2.1f);
                     p.Homing = true;
+                    p.HomingTime = 1.6f;
                     p.TurnRate = 4.4f;
                     p.HomingDelay = 0.12f;
                     p.HomingTarget = Director.Instance != null ? Director.Instance.NearestEnemy(pos) : null;
@@ -109,10 +115,11 @@ namespace AuroraRift
             if (_owner.Weapons.ActiveId == "prism")
             {
                 FireCooldown = Kind == "lance" ? 0.82f : 1.05f;
+                // 原版棱镜线给僚机换的是 beam 弹（entities.js:851），不是 lance
                 var b = BulletPool.Instance.Spawn(Team.Player, pos + new Vector2(0f, 9f * GameConfig.Px),
-                    Vector2.up * (600f * GameConfig.Px),
+                    new Vector2(lean * 150f * GameConfig.Px, 600f * GameConfig.Px),
                     Mathf.Max(1, Mathf.Round((Kind == "lance" ? 4 : 3) * _owner.Weapons.DamageMul())),
-                    6f * GameConfig.Px, line.Tint, "lance", 2.4f);
+                    6f * GameConfig.Px, line.Tint, "beam", 2.4f);
                 b.Piercing = true;
                 b.PierceLeft = Kind == "lance" ? 2 : 1;
                 return;
@@ -120,13 +127,13 @@ namespace AuroraRift
 
             FireCooldown = Kind == "gunner" ? 0.34f : 0.5f;
             BulletPool.Instance.Spawn(Team.Player, pos + new Vector2(0f, 7f * GameConfig.Px),
-                Vector2.up * (1180f * GameConfig.Px),
+                new Vector2(lean * 260f * GameConfig.Px, 1180f * GameConfig.Px),
                 Mathf.Max(1, Mathf.Round(1 * _owner.Weapons.DamageMul())),
                 4f * GameConfig.Px, line.Tint, "drone", 1.9f);
             if (Kind == "lance")
             {
                 BulletPool.Instance.Spawn(Team.Player, pos + new Vector2(-5f * GameConfig.Px, 4f * GameConfig.Px),
-                    new Vector2(-60f * GameConfig.Px, 1140f * GameConfig.Px),
+                    new Vector2((lean * 320f - 60f) * GameConfig.Px, 1140f * GameConfig.Px),
                     Mathf.Max(1, Mathf.Round(1 * _owner.Weapons.DamageMul())),
                     4f * GameConfig.Px, line.Tint, "drone", 1.9f);
             }
