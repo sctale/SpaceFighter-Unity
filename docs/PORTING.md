@@ -90,6 +90,13 @@ Unity.exe -batchmode -quit -projectPath D:/V-Coding/space-fighter-unity \
 | 震动/触感 | `haptic([...])`（Capacitor） | ❌ 未接（Unity 需 Android 震动插件，暂缺） |
 | 背景视差 | `background.js` 分层视差 | ⚠️ 各星区天空已区分主题，逐层视差未复刻 |
 
+### 舰船美术管线（v0.15.0 新增 / v0.19.0 起改 Blender 渲染）
+
+> 从 v0.19.0 起 38 张精灵改为 **Blender 建模 + Cycles 正交渲图 + 外发光**，
+> 完整操作说明（环境、命令、场景参数、输出契约、六条硬教训、排查表）见
+> [`docs/BLENDER-LOWPOLY.md`](BLENDER-LOWPOLY.md) 的「路径 B」。
+> 下面这段是 v0.15.0 时期的 PIL 程序化管线，仍用于加性光效贴图。
+
 ### 舰船美术管线（v0.15.0 新增）
 
 - 源脚本：`artgen/gen_ships.py`，CPU 光栅化（3–4× 超采样 + 面积降采样），输出到

@@ -106,7 +106,7 @@ Assets/Scripts/      # 核心循环、实体、Boss、导演、HUD、视觉层
 Assets/Editor/       # CLI 构建、数值门禁、舰船贴图导入规则
 Assets/Resources/    # Ships（舰船 PNG）、Icon（应用图标）与字体子集
 artgen/              # Python 美术生成器（舰船/图标）+ 字体子集脚本 + 预览图
-docs/                # 重构对照表、使用说明、验收截图
+docs/                # 重构对照表、使用说明、Blender 操作说明（BLENDER-LOWPOLY.md）、验收截图
 web/                 # 网页版 v2.8.4 源码（玩法/数值的对照基准，见 web/INTEGRATED.md）
 backups/             # 旧仓库整包备份（本地文件，不进 git）
 ```
