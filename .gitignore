@@ -33,3 +33,6 @@ web/android/local.properties
 # 旧仓库整包备份（36MB，放本地不进仓库）
 backups/
 
+
+# Blender 渲染中间产物（可重跑，不入库）
+artgen/blender/out/
