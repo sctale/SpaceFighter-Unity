@@ -59,6 +59,9 @@ namespace AuroraRift
         public string CastLabel => _castLabel;
         public Color TellColor => _tellColor;
         public bool Casting => _casting;
+        public float TimerLeft => _timer;
+        public float StunLeft => _stun;
+        public float BreakLeft => BreakGauge;
         /// <summary>原版是椭圆判定：rx = size×1.02 + 弹半径，ry = size×0.82 + 弹半径。</summary>
         public float HitRx => _sizePx * GameConfig.BossHitRx * GameConfig.Px;
         public float HitRy => _sizePx * GameConfig.BossHitRy * GameConfig.Px;
@@ -149,7 +152,7 @@ namespace AuroraRift
             // 白剪影压在机体后面、略放大，只露出受击光环，不再整机泛白
             flashGo.transform.localScale = Vector3.one * 1.035f;
 
-            _timer = 2.2f;
+            _timer = GameConfig.BossInitialCd;
             GameRoot.Instance?.Announce(BossLabel, BossTitle, 2.4f, true);
             _hitsAtSpawn = GameRoot.Instance != null ? GameRoot.Instance.Stats.Hits : 0;
         }
@@ -174,9 +177,11 @@ namespace AuroraRift
             if (_stun > 0f)
             {
                 _stun -= dt;
-                // 破防结束的那一下要立刻补一招（entities.js:1920-1926）
+                // 破防结束的那一下要立刻补一招（entities.js:1920-1926）。
+                // 注意这里**不能 return**：原版的 broken 只做「取消当前招 + 受伤 ×1.35」，
+                // 机体照常悬停、出招计时照常走。早退会让 Boss 每 4 秒静默 1.2 秒，
+                // 玩家看到的就是「它根本不还手」。
                 if (_stun <= 0f) _timer = Mathf.Min(_timer, GameConfig.BossPostBreakCd);
-                return;
             }
 
             if (_mercy > 0f) _mercy -= dt;
@@ -1010,6 +1015,12 @@ namespace AuroraRift
             {
                 BreakGauge = 0f;
                 _stun = GameConfig.BossBreakStun;
+                // 原版破防会把当前招式打断（attack = null / attackLabel = 核心破防）
+                _casting = false;
+                _emitter = null;
+                _lockMove = false;
+                _pending.Clear();
+                _castLabel = "";
                 GameRoot.Instance?.ClearEnemyBullets(false);
                 GameRoot.Instance?.RegisterBreak();
                 GameRoot.Instance?.Hitstop(GameConfig.FreezeHit);   // 原版破防钉 50ms

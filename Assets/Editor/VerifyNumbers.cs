@@ -543,6 +543,16 @@ namespace AuroraRift.EditorTools
             // 破防期间不攒槽：否则持续输出会把 Boss 永久锁在眩晕里（v0.19.2 实测）
             CheckTrue("beh.bossBreak.frozenWhileStunned",
                       !BossController.BreakGaugeAccrues(stunned: true, broken: false));
+            // 僚机种类：三个挂点要能凑出三种（v0.19.3 里 Bind 传 null 导致永远只有 gunner）
+            var droneUsed = new HashSet<string>();
+            Check("beh.drone.pickFirst", GameConfig.PickDroneKind(droneUsed, 0), "gunner");
+            droneUsed.Add("gunner");
+            Check("beh.drone.pickSecond", GameConfig.PickDroneKind(droneUsed, 0), "lance");
+            droneUsed.Add("lance"); droneUsed.Add("aegis"); droneUsed.Add("swarm");
+            CheckTrue("beh.drone.pickAllUsed",
+                      System.Array.IndexOf(GameConfig.DroneKinds, GameConfig.PickDroneKind(droneUsed, 7)) >= 0);
+            Check("beh.drone.kinds", GameConfig.DroneKinds.Length, 4);
+
             CheckTrue("beh.bossBreak.accruesNormally",
                       BossController.BreakGaugeAccrues(stunned: false, broken: false));
 

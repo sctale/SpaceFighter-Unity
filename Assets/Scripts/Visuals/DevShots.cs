@@ -175,7 +175,8 @@ namespace AuroraRift
             string bossInfo = boss == null
                 ? "boss=-"
                 : $"boss hp={boss.Hp:F0}/{boss.MaxHp:F0} ph={boss.Phase + 1} casting={boss.Casting} " +
-                  $"tell={boss.TelegraphLeft:F2} cast=[{boss.CastLabel}]";
+                  $"tell={boss.TelegraphLeft:F2} timer={boss.TimerLeft:F2} stun={boss.StunLeft:F2} " +
+                  $"gauge={boss.BreakLeft:F0} cast=[{boss.CastLabel}]";
             float charge = g != null && g.Player != null ? g.Player.Weapons.Active.Charge : 0f;
             Debug.Log($"[PROBE] t={_clock:F1} state={(g != null ? g.State.ToString() : "-")} " +
                       $"score={(g != null ? g.Score : 0f):F0} pb={pb} eb={eb} charge={charge:F0} " +

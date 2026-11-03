@@ -123,7 +123,7 @@ namespace AuroraRift
             _small = Label(19, Muted);
             _body = Label(21, InkText);
             _num = Label(40, Paper);
-            _numBig = Label(62, Paper);
+            _numBig = Label(50, Paper);   // 原版 24.8 CSS；62 会溢出 52 的框、压住 BEST 行
             _title = Label(118, Paper);
 
             _h1 = Label(58, Paper, TextAnchor.MiddleLeft);
@@ -333,7 +333,7 @@ namespace AuroraRift
             }
 
             Txt(_tiny, Center(w, RefH - bottom - 24f, 900f, 24f),
-                Sp("v0.19.3") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
+                Sp("v0.19.4") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
         }
 
         /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
@@ -400,10 +400,13 @@ namespace AuroraRift
             // ---- 左上：分数块（eyebrow 18.4 / 数字 31.4 / BEST 58.2 / GRAZE 71.2）----
             Txt(Label(18, Muted, TextAnchor.UpperLeft), R(pad, top + 36.8f, 420f, 22f), Sp("SCORE"), Muted);
             Bold(_numBig, R(pad, top + 62.8f, 460f, 52f), Mathf.RoundToInt(root.Score).ToString("N0"), Paper, 2f);
-            Txt(_tiny, R(pad, top + 116.4f, 300f, 20f), "BEST ", Dimc);
-            Txt(_small, R(pad + 58f, top + 113.4f, 300f, 22f), root.Best.ToString("N0"), new Color(Gold.r, Gold.g, Gold.b, 0.85f));
-            Txt(_tiny, R(pad, top + 142.4f, 300f, 18f), "GRAZE ", Dimc);
-            Txt(_small, R(pad + 72f, top + 140.4f, 300f, 20f), root.Stats.Graze.ToString(), Teal);
+            // BEST/GRAZE 跟着数字的实测字高走，换字号时不会再压行
+            float numH = _numBig.CalcSize(new GUIContent("0")).y;
+            float bestY = top + 66.8f + numH;
+            Txt(_tiny, R(pad, bestY, 300f, 20f), "BEST ", Dimc);
+            Txt(_small, R(pad + 58f, bestY - 3f, 300f, 22f), root.Best.ToString("N0"), new Color(Gold.r, Gold.g, Gold.b, 0.85f));
+            Txt(_tiny, R(pad, bestY + 26f, 300f, 18f), "GRAZE ", Dimc);
+            Txt(_small, R(pad + 72f, bestY + 24f, 300f, 20f), root.Stats.Graze.ToString(), Teal);
 
             // ---- 中上：星区（eyebrow 19.4 / 数字 31.4 / 区名 50.4）----
             if (dir != null)
@@ -540,10 +543,11 @@ namespace AuroraRift
             string wname = detuned ? "失谐排气" : GameConfig.WeaponName(p.Weapons.ActiveId, p.Weapons.Level);
             var nameCol = detuned ? Rose : InkText;
             float copyX = ring.xMax + 14f;
-            Txt(Label(19, nameCol, TextAnchor.UpperLeft), R(copyX, bandTop + 30f, 84f, 20f), wname, nameCol);
+            Txt(Label(18, nameCol, TextAnchor.UpperLeft), R(copyX, bandTop + 26f, 84f, 22f), wname, nameCol);
             for (int i = 0; i < 5; i++)
             {
-                var pip = R(copyX + i * 17.5f, bandTop + 56f, 14f, 6f);
+                // 名字与等级条之间留足字高：以前 19 号字挤在 20 高的框里，笔画直接压到格子上
+                var pip = R(copyX + i * 17.5f, bandTop + 58f, 14f, 6f);
                 bool on = i < p.Weapons.Level;
                 UiKit.Line(pip, on ? line.Tint : new Color(0.63f, 0.71f, 1f, 0.18f));
             }

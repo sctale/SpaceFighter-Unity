@@ -329,6 +329,17 @@ namespace AuroraRift
         // 挂点（原版像素，y 向下）：1 架 (-64,8)；2 架 (±64,8)；3 架 (-68,2)/(68,2)/(0,48)
         public static readonly Vector2[] DroneSlots2A = { new Vector2(-64, 8), new Vector2(64, 8) };
         public static readonly Vector2[] DroneSlots3 = { new Vector2(-68, 2), new Vector2(68, 2), new Vector2(0, 48) };
+        /// <summary>
+        /// 僚机种类挑选：优先补一个当前没有的种类（原版 pickDrone 的 unique 偏好），
+        /// 三个挂点因此能凑成三种不同僚机；都有了才随机。纯函数，门禁直接断言。
+        /// </summary>
+        public static string PickDroneKind(System.Collections.Generic.HashSet<string> inUse, int roll)
+        {
+            foreach (var k in DroneKinds)
+                if (inUse == null || !inUse.Contains(k)) return k;
+            return DroneKinds[Mathf.Abs(roll) % DroneKinds.Length];
+        }
+
         public const float AegisPdInterval = 0.5f;   // 原版 pdT = 0.5（game.js:794），环视觉与点防同拍
         public const float AegisPdRadiusPx = 38f;
         public static readonly float AegisPdRadius = AegisPdRadiusPx * Px;

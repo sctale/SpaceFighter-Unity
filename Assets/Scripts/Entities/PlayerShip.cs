@@ -143,12 +143,18 @@ namespace AuroraRift
         /// <summary>补给箱：补回一架失联僚机（最多 3 架）。</summary>
         public void RestoreDrone()
         {
+            // 优先补一个当前没有的种类（原版 pickDrone 的 unique 偏好）：
+            // 以前这里传 null，Bind 一律落回 gunner，三个挂点永远是同一种僚机。
+            var used = new System.Collections.Generic.HashSet<string>();
+            foreach (var d0 in _drones) if (d0 != null) used.Add(d0.Kind);
+            string pick = GameConfig.PickDroneKind(used, Random.Range(0, 4));
+
             for (int i = 0; i < _drones.Length; i++)
             {
                 if (_drones[i] != null) continue;
                 var go = new GameObject("Drone" + i);
                 var d = go.AddComponent<DroneShip>();
-                d.Bind(this, i, null);
+                d.Bind(this, i, pick);
                 _drones[i] = d;
                 return;
             }
