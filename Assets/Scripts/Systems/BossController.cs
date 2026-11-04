@@ -29,6 +29,7 @@ namespace AuroraRift
         float _breakMax = 100f, _bulletSpeedBase = 2.8f, _mercy = -1f, _idleCd;
         float _timer, _telegraph = -1f, _stun;
         Vector2 _anchor;
+        bool _entered;                 // 只有「入场下降」这一段时间无敌；Charge/Blink 抬高不算
         SpriteRenderer _sr, _aura, _ring, _core, _flash;
         string _kind = "gatekeeper";
         float _flashT, _ringSpeed = 22f;
@@ -71,6 +72,7 @@ namespace AuroraRift
 
         public void Setup(int zone, Difficulty diff)
         {
+            Phase = 0;
             _diff = diff;
             _zone = zone;
             _tier = BossMoves.TierForZone(zone);
@@ -93,6 +95,7 @@ namespace AuroraRift
             float topPx = Mathf.Max(2f * GameView.HalfHeight / GameConfig.Px * 0.27f, 252f);
             _anchor = new Vector2(0f, GameView.FromTopPx(topPx));
             transform.position = new Vector3(_anchor.x, GameView.HalfHeight + 1.5f, 0f);
+            _entered = false;
             _pending.Clear();
             BossLaser.ClearAll();
 
@@ -164,27 +167,44 @@ namespace AuroraRift
             if (root == null || root.State != GameState.Playing) return;
             float dt = Time.deltaTime;
             TickVisuals(dt);
-            TickPending(dt);
+            if (_mercy > 0f) _mercy -= dt;
 
             Vector2 p = transform.position;
-            if (p.y > _anchor.y)
+            if (!_entered)
             {
-                p.y = Mathf.MoveTowards(p.y, _anchor.y, 2.2f * dt);
-                transform.position = p;
-                return;
+                if (p.y > _anchor.y)
+                {
+                    p.y = Mathf.MoveTowards(p.y, _anchor.y, 2.2f * dt);
+                    transform.position = p;
+                    return;
+                }
+                _entered = true;
             }
 
+            // 打断窗口：破防/技能打断期间冻结「预告、招式节拍、出招计时」三只时钟，
+            // 只让机体悬停。原版也是 broken 期间暂停当前 attack（entities.js:1920-1926）——
+            // 如果让节拍在眩晕里继续跑完，醒来时这一招已经没有子弹可放，看起来就是"不会攻击"。
             if (_stun > 0f)
             {
                 _stun -= dt;
-                // 破防结束的那一下要立刻补一招（entities.js:1920-1926）。
-                // 注意这里**不能 return**：原版的 broken 只做「取消当前招 + 受伤 ×1.35」，
-                // 机体照常悬停、出招计时照常走。早退会让 Boss 每 4 秒静默 1.2 秒，
-                // 玩家看到的就是「它根本不还手」。
-                if (_stun <= 0f) _timer = Mathf.Min(_timer, GameConfig.BossPostBreakCd);
+                if (_stun <= 0f)
+                {
+                    _stun = 0f;
+                    if (_casting && (float.IsNaN(_moveT) || float.IsNaN(_moveDur) || _moveT >= _moveDur))
+                        EndMove();
+                    if (!_casting && _telegraph <= 0f) _castLabel = "";
+                    // 醒来的第一招最迟 0.55 秒后开始；NaN/Infinity 一律拉回正常值
+                    _timer = ResumeTimer(_timer);
+                    Debug.Log($"[BOSS-RESUME] t={Time.time:F1} casting={_casting} " +
+                              $"move={_move} timer={_timer:F2} telegraph={_telegraph:F2}");
+                }
+                Hover(dt);      // 移动类招式被冻结时 _lockMove 仍为 true，不会抢位置
+                return;
             }
+            if (_stun < 0f) _stun = 0f;
 
-            if (_mercy > 0f) _mercy -= dt;
+            TickPending(dt);
+            Watchdog();
 
             float frac = Hp / Mathf.Max(1f, MaxHp);
             int wantPhase = frac > GameConfig.BossPhaseHigh ? 0
@@ -197,6 +217,7 @@ namespace AuroraRift
                 _desperate = true;
                 _index = 0;
                 _casting = false; _emitter = null; _lockMove = false; _castLabel = "";
+                _moveT = 0f; _moveDur = 0f; _telegraph = -1f;
                 _pending.Clear(); BossLaser.ClearAll();
                 _timer = GameConfig.BossDesperateCd;
                 root.Hitstop(GameConfig.FreezeDesperate);
@@ -204,7 +225,7 @@ namespace AuroraRift
                 AudioDirector.Instance?.PlayWarn();
             }
 
-            if (_casting) { TickMove(dt); return; }
+            if (_casting) { Hover(dt); TickMove(dt); return; }
 
             if (_telegraph > 0f)
             {
@@ -228,6 +249,26 @@ namespace AuroraRift
             }
         }
 
+        /// <summary>破防结束/异常防御：醒来后的第一招最迟 0.55 秒，NaN/Infinity 拉回正常值。</summary>
+        public static float ResumeTimer(float timer)
+        {
+            if (float.IsNaN(timer) || float.IsInfinity(timer)) return GameConfig.BossPostBreakCd;
+            return Mathf.Min(timer, GameConfig.BossPostBreakCd);
+        }
+
+        /// <summary>
+        /// 状态机看门狗：任何异常路径（NaN 计时、招式超时没结束）都把 Boss 拉回可出招状态。
+        /// 打断状态最怕的就是某个字段卡住后 Update 永远进不了 chooseAttack。
+        /// </summary>
+        void Watchdog()
+        {
+            if (float.IsNaN(_timer) || float.IsInfinity(_timer)) _timer = GameConfig.BossPostBreakCd;
+            if (float.IsNaN(_telegraph) || float.IsInfinity(_telegraph) || _telegraph < -1f) _telegraph = -1f;
+            if (float.IsNaN(_stun) || _stun < 0f) _stun = 0f;
+            if (_casting && (float.IsNaN(_moveT) || float.IsNaN(_moveDur) || _moveT > _moveDur + 0.75f))
+                EndMove();
+        }
+
         /// <summary>
         /// 悬停：三阶段摆幅更大、频率更快（entities.js:1913-1918），
         /// 出招期间（blink/charge）由招式自己接管位置。
@@ -248,12 +289,14 @@ namespace AuroraRift
         void EnterPhase(int want)
         {
             _phase = want;
+            Phase = want;          // 公开属性给 HUD/探针用；之前只改 _phase，面板永远显示 P1
             _index = 0;
             _spellCount = 0;
             // 原版换阶段会把破防槽和破防状态一起清零，并打断当前招式
             BreakGauge = 0f;
             _stun = 0f;
             _casting = false; _emitter = null; _lockMove = false; _castLabel = "";
+            _moveT = 0f; _moveDur = 0f;
             _pending.Clear();
             BossLaser.ClearAll();
             GameRoot.Instance?.ClearEnemyBullets(true);
@@ -1002,8 +1045,12 @@ namespace AuroraRift
             return new Vector2(v.x * c - v.y * s, v.x * s + v.y * c);
         }
 
-        /// <summary>入场（还没降到悬停点）期间不该吃伤害——原版 hit() 里 entering 直接 return。</summary>
-        public bool Entering => transform.position.y > _anchor.y + 0.01f;
+        /// <summary>
+        /// 入场（还没降到悬停点）期间不该吃伤害——原版 hit() 里 entering 直接 return。
+        /// 注意这是「一次性入场」标志，不是位置判断：Charge/Blink 会把机体抬到悬停点之上，
+        /// 位置判断会把它当成还在入场，整招无敌。
+        /// </summary>
+        public bool Entering => !_entered;
 
         /// <summary>结算入口的可受伤判定（纯函数，门禁可断言）。</summary>
         public static bool CanTakeDamage(bool entering, bool dying) => !entering && !dying;

@@ -560,6 +560,11 @@ namespace AuroraRift.EditorTools
 
             CheckTrue("beh.bossBreak.accruesNormally",
                       BossController.BreakGaugeAccrues(stunned: false, broken: false));
+            // 破防醒来必须能恢复出招：计时封顶 0.55s，NaN/Infinity 不许把状态机卡死
+            Check("beh.bossResume.clamp", BossController.ResumeTimer(5f), GameConfig.BossPostBreakCd);
+            Check("beh.bossResume.keep", BossController.ResumeTimer(0.2f), 0.2f);
+            Check("beh.bossResume.nan", BossController.ResumeTimer(float.NaN), GameConfig.BossPostBreakCd);
+            Check("beh.bossResume.inf", BossController.ResumeTimer(float.PositiveInfinity), GameConfig.BossPostBreakCd);
 
             // ---- 武器别名：满级要有满级的叫法，不能一路"脉冲"到五档 ----
             Check("beh.alias.pulse1", GameConfig.WeaponName("pulse", 1), "脉冲炮");

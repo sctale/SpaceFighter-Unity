@@ -41,6 +41,10 @@ namespace AuroraRift
         bool _pause;      // 拍暂停页
         bool _dead;       // 拍结算页
         bool _forced;
+        bool _breakBoss;  // 诊断：到点强制打满一次破防槽
+        bool _broke;
+        bool _nova;       // 诊断：到点强制放一次星爆
+        bool _novaFired;
 
         public static void MaybeCreate()
         {
@@ -50,7 +54,9 @@ namespace AuroraRift
             bool laser = Array.IndexOf(args, "-laser") >= 0;
             bool pause = Array.IndexOf(args, "-pause") >= 0;
             bool dead = Array.IndexOf(args, "-dead") >= 0;
-            if (!shots && !dump && !laser && !pause && !dead) return;
+            bool probe = Array.IndexOf(args, "-probe") >= 0;
+            bool nova = Array.IndexOf(args, "-nova") >= 0;
+            if (!shots && !dump && !laser && !pause && !dead && !probe && !nova) return;
             var go = new GameObject("DevShots");
             var d = go.AddComponent<DevShots>();
             d._shots = shots;
@@ -59,12 +65,14 @@ namespace AuroraRift
             d._laser = laser;
             d._pause = pause;
             d._dead = dead;
+            d._probe = probe;
+            d._breakBoss = Array.IndexOf(args, "-break") >= 0;
+            d._nova = nova;
             d._quitAfter = Array.IndexOf(args, "-autoshot") >= 0;
             if (Array.IndexOf(args, "-long") >= 0) d._times = LongTimes;
             d._dir = Path.Combine(Directory.GetCurrentDirectory(), "docs", "shots");
             d._tag = Arg(args, "-tag") ?? ("zone" + (Arg(args, "-zone") ?? "1"));
             d._move = Arg(args, "-move");
-            d._probe = Array.IndexOf(args, "-probe") >= 0;
             d._weapon = Arg(args, "-weapon");
             d._lvl = Arg(args, "-lvl");
             d._quit = Array.IndexOf(args, "-quit") >= 0;
@@ -117,6 +125,30 @@ namespace AuroraRift
             {
                 _probeT += Time.unscaledDeltaTime;
                 if (_probeT >= 0.5f) { _probeT = 0f; Probe(); }
+            }
+            // 诊断星爆打断：9.5 秒强制攒满放一次，之后看 Boss 还会不会出招
+            if (_nova && !_novaFired && _clock > 9.5f)
+            {
+                var p = GameRoot.Instance != null ? GameRoot.Instance.Player : null;
+                if (p != null)
+                {
+                    _novaFired = true;
+                    p.Nova = 100f;
+                    p.TryNova();
+                    Debug.Log("[AURORA-NOVA] forced at t=" + _clock.ToString("F1"));
+                }
+            }
+            // 诊断破防恢复：7 秒时把破防槽一次性打满，之后看它还会不会出招
+            if (_breakBoss && !_broke && _clock > 7f)
+            {
+                var boss = Director.Instance != null ? Director.Instance.Boss : null;
+                if (boss != null)
+                {
+                    _broke = true;
+                    boss.TakeDamage(boss.BreakMax);
+                    Debug.Log($"[AURORA-BREAK] t={_clock:F1} breakMax={boss.BreakMax:F1} " +
+                              $"entering={boss.Entering} dying={boss.Dying} hp={boss.Hp:F1}");
+                }
             }
             if (_quit && _quitAt <= 0f) _quitAt = _clock + 26f;
             if (_quitAt > 0f && _clock >= _quitAt) { _quitAt = -1f; Application.Quit(); }
@@ -198,9 +230,13 @@ namespace AuroraRift
                   $"tell={boss.TelegraphLeft:F2} timer={boss.TimerLeft:F2} stun={boss.StunLeft:F2} " +
                   $"gauge={boss.BreakLeft:F0} cast=[{boss.CastLabel}]";
             float charge = g != null && g.Player != null ? g.Player.Weapons.Active.Charge : 0f;
-            Debug.Log($"[PROBE] t={_clock:F1} state={(g != null ? g.State.ToString() : "-")} " +
+            var pl = g != null ? g.Player : null;
+            string plInfo = pl != null
+                ? $"hull={pl.Hull} sh={pl.Shields} inv={pl.Invuln:F1} nova={pl.Nova:F0} "
+                : "pl=- ";
+            Debug.Log($"[PROBE] t={_clock:F1} ts={Time.timeScale:F2} state={(g != null ? g.State.ToString() : "-")} " +
                       $"score={(g != null ? g.Score : 0f):F0} pb={pb} eb={eb} charge={charge:F0} " +
-                      $"zone={(d != null ? d.Zone : 0)} run={(d != null ? d.State.ToString() : "-")} {bossInfo}");
+                      $"{plInfo}zone={(d != null ? d.Zone : 0)} run={(d != null ? d.State.ToString() : "-")} {bossInfo}");
         }
 
         /// <summary>
