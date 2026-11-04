@@ -306,8 +306,8 @@ namespace AuroraRift.EditorTools
             Check("boss.critical", GameConfig.BossCriticalFrac, 0.12f);
             Check("boss.desperateFrac", GameConfig.BossDesperateFrac, 0.12f);
             Check("boss.mercy", GameConfig.BossMercyWindow, 1.15f);
-            Check("boss.breakFloor", GameConfig.BossBreakFloor, 60f);
-            Check("boss.breakFrac", GameConfig.BossBreakFracOfMaxHp, 0.18f);
+            Check("boss.breakFloor", GameConfig.BossBreakFloor, 90f);   // Unity 提高（见 PARITY）
+            Check("boss.breakFrac", GameConfig.BossBreakFracOfMaxHp, 0.30f);
             Check("boss.breakStun", GameConfig.BossBreakStun, 1.2f);
             Check("boss.breakDamageMul", GameConfig.BossBreakDamageMul, 1.35f);
             Check("boss.telegraph", BossMoves.TelegraphTime, 0.5f);

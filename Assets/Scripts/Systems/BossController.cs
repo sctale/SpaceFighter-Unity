@@ -1021,12 +1021,8 @@ namespace AuroraRift
             {
                 BreakGauge = 0f;
                 _stun = GameConfig.BossBreakStun;
-                // 原版破防会把当前招式打断（attack = null / attackLabel = 核心破防）
-                _casting = false;
-                _emitter = null;
-                _lockMove = false;
-                _pending.Clear();
-                _castLabel = "";
+                // 破防不再打断当前招式：原版会 cancel，但实测玩家持续输出时每 4 秒就打断一次，
+                // 招式永远放不完，Boss 显得"不会还手"。这里保留伤害倍率与破防提示，让招式走完。
                 GameRoot.Instance?.ClearEnemyBullets(false);
                 GameRoot.Instance?.RegisterBreak();
                 GameRoot.Instance?.Hitstop(GameConfig.FreezeHit);   // 原版破防钉 50ms

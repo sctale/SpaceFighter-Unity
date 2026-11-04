@@ -333,7 +333,7 @@ namespace AuroraRift
             }
 
             Txt(_tiny, Center(w, RefH - bottom - 24f, 900f, 24f),
-                Sp("v0.20.0") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
+                Sp("v0.20.1") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
         }
 
         /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
@@ -392,7 +392,7 @@ namespace AuroraRift
             // 顶/底渐变压暗：.hud::before 高 136px、::after 高 118px，两端都是渐隐不是硬边
             // 敌机会从顶栏背后掠过，压暗不够就会"把分数盖住"（用户反馈两次）：
             // 顶带不透明度提到 0.72，并给顶部留 12px 最小安全边（刘海机不贴边）。
-            float topPad = Mathf.Max(top, 24f);
+            float topPad = top;   // 不再额外下移：下移会把分数块推进 Boss 面板
             var prev = GUI.color;
             GUI.color = new Color(0.016f, 0.024f, 0.059f, 0.72f);
             GUI.DrawTexture(R(0, 0, w, 136f * 2f + topPad), UiKit.VeilTop);
@@ -402,8 +402,10 @@ namespace AuroraRift
 
             // ---- 左上：分数块（eyebrow 18.4 / 数字 31.4 / BEST 58.2 / GRAZE 71.2）----
             // 分数块下面垫一层很淡的底板：无论后面飞过什么，这四行始终可读
-            UiKit.Panel(R(pad - 10f, topPad + 20f, 300f, 176f),
-                new Color(0.008f, 0.012f, 0.032f, 0.34f), Line(0.06f), 12f);
+            // 底板只包住 SCORE/数字/BEST/GRAZE 四行（到 78 CSS = 156 ref），
+            // Boss 面板从 168.8 ref 开始，两者留 12 ref 的缝
+            UiKit.Panel(R(pad - 10f, topPad + 26f, 300f, 130f),
+                new Color(0.008f, 0.012f, 0.032f, 0.30f), Line(0.05f), 10f);
             Txt(Label(18, Muted, TextAnchor.UpperLeft), R(pad, topPad + 36.8f, 420f, 22f), Sp("SCORE"), Muted);
             Bold(_numBig, R(pad, topPad + 62.8f, 460f, 52f), Mathf.RoundToInt(root.Score).ToString("N0"), Paper, 2f);
             // BEST/GRAZE 跟着数字的实测字高走，换字号时不会再压行

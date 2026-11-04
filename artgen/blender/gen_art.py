@@ -23,6 +23,7 @@ from mathutils import Vector
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 DEFAULT_OUT = os.path.join(ROOT, "Assets", "Resources", "Ships")
+LOWPOLY_STYLE = True   # True = 与 Polyfork 低模统一的哑光平面语言
 ART_EXTENT = 0.46          # 与 ShipArt.ArtExtent 一致
 VIEW = 2.0                 # 正交相机视野跨度（世界单位）
 
@@ -107,7 +108,15 @@ def setup_lights():
     # 轮廓光 rim：低角度长条，勾出霓虹边——硬表面的"金属感"主要靠这条
     _area("Rim", (2.8, -0.2, 0.5), (math.radians(84), 0, math.radians(96)), (2.4, 0.6), 420, (0.42, 0.55, 1.0))
     # 底部轮廓：从 -Y 侧托一道暗青，让机体边缘与深色背景分开
-    _area("Under", (-0.6, -2.6, 0.8), (math.radians(70), 0, math.radians(-14)), (2.2, 0.6), 120, (0.35, 0.85, 0.95))
+    _area("Under", (-0.6, -2.6, 0.8), (math.radians(70), 0, math.radians(-14)), (2.2, 0.6),
+          84 if LOWPOLY_STYLE else 120, (0.35, 0.85, 0.95))
+    if LOWPOLY_STYLE:
+        # 低模靠色块与硬转折，高光一强整片泛白：压曝光、削 key/rim
+        bpy.context.scene.view_settings.exposure = -0.30
+        for _n, _k in (("Key", 0.80), ("Rim", 0.40)):
+            _o = bpy.data.objects.get(_n)
+            if _o is not None and _o.type == 'LIGHT':
+                _o.data.energy *= _k
 
 
 # ----------------------------------------------------------------- 材质

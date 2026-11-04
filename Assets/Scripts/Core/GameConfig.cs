@@ -272,8 +272,8 @@ namespace AuroraRift
         public const float BossPhaseLow = 0.30f;
         public const float BossCriticalFrac = 0.12f;
         public const float BossMercyWindow = 1.15f;
-        public const float BossBreakFloor = 60f;
-        public const float BossBreakFracOfMaxHp = 0.18f;
+        public const float BossBreakFloor = 90f;        // 原版 60；Unity 提高，避免每 4 秒一次破防
+        public const float BossBreakFracOfMaxHp = 0.30f;  // 原版 0.18；同上（见 docs/PARITY.md）
         public const float BossBreakStun = 1.2f;
         public const float BossBreakDamageMul = 1.35f;
         public const float BossTelegraph = 0.5f;
