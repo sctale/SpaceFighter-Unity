@@ -520,8 +520,12 @@ ENEMY_SPECS = {
 
 
 def build_from_spec(name, spec):
-    # 敌机在游戏里只有 16-38px，比玩家机更依赖"提亮"：暗装甲缩到 20px 会糊成黑块
-    hull, armor, dark = _mats(name, (0.062, 0.082, 0.118), (0.105, 0.128, 0.170))
+    # 机种身份色：机体用该机种 Tint 压暗到 26%，装甲略亮——12 种敌机必须一眼区分得开。
+    # （之前 accent 只进霓虹条，机体一律深金属，结果全屏都是银白盾形）
+    acc = hex_rgb(spec["accent"])
+    hull_col = tuple(min(0.30, c * 0.26) for c in acc)
+    armor_col = tuple(min(0.52, c * 0.45 + 0.03) for c in acc)
+    hull, armor, dark = _mats(name, hull_col, armor_col)
     neon = mat_emit(name + "_neon", hex_rgb(spec["accent"]), 1.35)
     table = {"hull": hull, "armor": armor, "dark": dark, "neon": neon}
     objs = []
@@ -694,15 +698,18 @@ def build_bullet(kind, accent):
     pin = mat_emit("bl_pin", tuple(min(1.0, c * 1.12 + 0.06) for c in accent), 1.5)
     objs = []
     if kind in ("bolt", "lance", "micro"):
-        w = {"bolt": 0.30, "lance": 0.22, "micro": 0.34}[kind]
-        l = {"bolt": 0.96, "lance": 1.00, "micro": 0.86}[kind]
-        objs.append(poly_prism("rim", _lens(w, l), -0.10, 0.10, rim, 0.012))
-        objs.append(poly_prism("body", _lens(w * 0.78, l * 0.96), 0.10, 0.16, hot, 0.006))
-        objs.append(poly_prism("pin", _lens(w * 0.20, l * 0.52), 0.16, 0.20, pin, 0.004))
+        # 玩家弹：短粗实心菱形（与敌弹的空心环形成形状差异）
+        w = {"bolt": 0.46, "lance": 0.34, "micro": 0.50}[kind]
+        l = {"bolt": 0.92, "lance": 0.98, "micro": 0.84}[kind]
+        dia = [(0, l), (w, 0), (0, -l), (-w, 0)]
+        objs.append(poly_prism("rim", dia, -0.10, 0.10, rim, 0.012))
+        objs.append(poly_prism("body", [(x * 0.80, y * 0.80) for x, y in dia], 0.10, 0.17, hot, 0.006))
+        objs.append(poly_prism("pin", [(x * 0.34, y * 0.34) for x, y in dia], 0.17, 0.21, pin, 0.0))
     elif kind == "orb":
-        objs.append(poly_prism("rim", _octagon(0.94, 1.0, 20), -0.12, 0.10, rim, 0.02))
-        objs.append(cyl("body", 0.74, 0.16, (0, 0, 0.14), hot, 24, bevel=0.012))
-        objs.append(cyl("pin", 0.20, 0.18, (0, 0, 0.20), pin, 18, bevel=0.008))
+        # 敌弹：空心环 + 亮芯，硬边八边形，整体比原来小一圈（视觉 ≈ 判定 1.3×）
+        objs.append(poly_prism("rim", _octagon(0.88, 1.0, 8), -0.12, 0.10, rim, 0.016))
+        objs.append(arc_ring("ring", 0.52, 0.72, 0, 2 * math.pi, 0.10, 0.17, hot, seg=28, bevel=0.0))
+        objs.append(cyl("pin", 0.20, 0.16, (0, 0, 0.17), pin, 12, bevel=0.004))
     elif kind == "heavy":
         objs.append(poly_prism("rim", _octagon(0.94, 1.0, 12), -0.14, 0.10, rim, 0.02))
         objs.append(poly_prism("body", _octagon(0.78, 1.0, 12), 0.10, 0.18, hot, 0.01))

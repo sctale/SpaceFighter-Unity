@@ -333,7 +333,7 @@ namespace AuroraRift
             }
 
             Txt(_tiny, Center(w, RefH - bottom - 24f, 900f, 24f),
-                Sp("v0.20.2") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
+                Sp("v0.21.0") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
         }
 
         /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
@@ -404,8 +404,9 @@ namespace AuroraRift
             // 分数块下面垫一层很淡的底板：无论后面飞过什么，这四行始终可读
             // 底板只包住 SCORE/数字/BEST/GRAZE 四行（到 78 CSS = 156 ref），
             // Boss 面板从 168.8 ref 开始，两者留 12 ref 的缝
+            // 硬边切角底板（低模语言）：不用圆角矩形，避免像"贴了张纸"
             UiKit.Panel(R(pad - 10f, topPad + 26f, 300f, 130f),
-                new Color(0.008f, 0.012f, 0.032f, 0.30f), Line(0.05f), 10f);
+                new Color(0.008f, 0.012f, 0.032f, 0.30f), Line(0.10f), 0f);
             Txt(Label(18, Muted, TextAnchor.UpperLeft), R(pad, topPad + 36.8f, 420f, 22f), Sp("SCORE"), Muted);
             Bold(_numBig, R(pad, topPad + 62.8f, 460f, 52f), Mathf.RoundToInt(root.Score).ToString("N0"), Paper, 2f);
             // BEST/GRAZE 跟着数字的实测字高走，换字号时不会再压行
