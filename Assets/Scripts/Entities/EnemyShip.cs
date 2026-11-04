@@ -22,7 +22,7 @@ namespace AuroraRift
         public bool Dead => _dead;
         public float Age => _age;
 
-        SpriteRenderer _sr, _flash, _ring, _armor;
+        SpriteRenderer _sr, _flash, _ring, _armor, _exhaust;
         float _age, _fireTimer, _phase, _charge, _flashT;
         float _summonT = 3.2f;
         Vector2 _anchor;
@@ -114,6 +114,18 @@ namespace AuroraRift
             }
             _sr.sortingOrder = 8;
             transform.localScale = Vector3.one;
+
+            // 小型尾焰：机体朝向 -Y，尾喷在 +Y；只做一层柔光，静止机体也有"在飞"的动势
+            if (kind != EnemyKind.Rock)
+            {
+                var exGo = new GameObject("Exhaust");
+                exGo.transform.SetParent(transform, false);
+                exGo.transform.localPosition = new Vector3(0f, _sizeWorld * 0.56f, 0f);
+                _exhaust = exGo.AddComponent<SpriteRenderer>();
+                _exhaust.sprite = ShipArt.Get("bullet_glow_soft", 1f) ?? RuntimeSprites.Disc(32);
+                _exhaust.sortingOrder = 7;
+                _exhaust.transform.localScale = Vector3.one * (_sizeWorld * 0.9f);
+            }
 
             var flashGo = new GameObject("Flash");
             flashGo.transform.SetParent(transform, false);
@@ -501,6 +513,12 @@ namespace AuroraRift
                 else _flash.enabled = false;
             }
             if (_ring != null) _ring.transform.Rotate(0f, 0f, 46f * dt);
+            if (_exhaust != null)
+            {
+                float k = 0.24f + Mathf.Sin(Time.time * 17f + _phase) * 0.07f;
+                _exhaust.color = new Color(Def.Tint.r, Def.Tint.g, Def.Tint.b, k);
+                _exhaust.transform.localScale = Vector3.one * (_sizeWorld * (0.82f + Mathf.Sin(Time.time * 21f + _phase) * 0.07f));
+            }
         }
 
         public bool TakeDamage(float dmg)
@@ -512,6 +530,16 @@ namespace AuroraRift
             _dead = true;
             if (GameRoot.Instance != null) GameRoot.Instance.Stats.Kills++;
             AudioDirector.Instance?.PlayExplode();
+            // 击破碎片 + 热闪：大目标多两片、更亮，再补半圈白闪和轻微震动
+            bool heavy = Elite || Kind == EnemyKind.Bulwark || Kind == EnemyKind.Carrier;
+            Debris.Burst(transform.position, Def.Tint, _sizeWorld, heavy ? 7 : 4, heavy ? 0.72f : 0.42f);
+            Impact.Spawn(transform.position, Color.Lerp(Def.Tint, Color.white, 0.55f),
+                         _sizeWorld * (heavy ? 2.6f : 1.9f), heavy ? 0.26f : 0.2f);
+            if (heavy)
+            {
+                Impact.Spawn(transform.position, new Color(1f, 1f, 1f, 0.9f), _sizeWorld * 3.4f, 0.1f);
+                CameraShake.Instance?.Shake(0.09f, 0.16f);
+            }
             if (Affix == Affix.Volatile) VolatileBlast();
             if (Kind == EnemyKind.Splitter)
             {

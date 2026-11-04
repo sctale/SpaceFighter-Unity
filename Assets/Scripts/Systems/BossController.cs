@@ -1084,6 +1084,11 @@ namespace AuroraRift
             for (int i = 0; i < 6; i++)
                 Impact.Spawn(transform.position + (Vector3)(Random.insideUnitCircle * 1.4f),
                     new Color(1f, 0.7f, 0.35f, 0.9f), 0.9f, 0.35f);
+            // 巨构崩解：碎片量按体型放大，再加三簇延迟热闪
+            Debris.Burst(transform.position, _accent, 1.7f, 14, 0.78f);
+            for (int i = 0; i < 3; i++)
+                Debris.Burst(transform.position + (Vector3)(Random.insideUnitCircle * 1.6f),
+                             Color.Lerp(_accent, Color.white, 0.35f), 0.9f, 5, 0.85f);
             Director.Instance?.OnBossDefeated();
             Destroy(gameObject);
         }

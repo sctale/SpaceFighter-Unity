@@ -40,6 +40,8 @@ namespace AuroraRift
 
         GameState _lastState = GameState.Menu;
         float _stateAt;
+        float _hitFx;
+        Color _hitTint = Color.white;
 
         // ---------------------------------------------------------------- 生命周期
 
@@ -98,12 +100,25 @@ namespace AuroraRift
             GUI.matrix = prev;
         }
 
+        /// <summary>受击反馈：屏幕边缘短促泛色（护盾紫 / 舰体玫红 / 力场金）。</summary>
+        public void HitFx(Color tint, float strength = 1f)
+        {
+            _hitTint = tint;
+            _hitFx = Mathf.Max(_hitFx, strength);
+        }
+
         /// <summary>扫描线 + 暗角：网页版 .stage-scan / .stage-vignette 的效果。</summary>
         void DrawStageFx(float w, GameRoot root)
         {
             if (root.LowFx) { UiKit.Vignette(new Rect(0, 0, w, RefH), 0.35f); return; }
             UiKit.Scanlines(new Rect(0, 0, w, RefH), 0.055f);
             UiKit.Vignette(new Rect(0, 0, w, RefH), 0.55f);
+            if (_hitFx > 0.002f)
+            {
+                _hitFx = Mathf.Max(0f, _hitFx - Time.unscaledDeltaTime * 5.5f);
+                float k = _hitFx * _hitFx;
+                UiKit.Vignette(new Rect(0, 0, w, RefH), 0.62f * k, _hitTint);
+            }
             // 低血量：边缘一圈玫红脉冲
             var p = root.Player;
             if (root.State == GameState.Playing && p != null && p.Hull <= 1)
@@ -333,7 +348,7 @@ namespace AuroraRift
             }
 
             Txt(_tiny, Center(w, RefH - bottom - 24f, 900f, 24f),
-                Sp("v0.21.1") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
+                Sp("v0.21.2") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
         }
 
         /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
@@ -391,10 +406,10 @@ namespace AuroraRift
 
             // 顶/底渐变压暗：.hud::before 高 136px、::after 高 118px，两端都是渐隐不是硬边
             // 敌机会从顶栏背后掠过，压暗不够就会"把分数盖住"（用户反馈两次）：
-            // 顶带不透明度提到 0.72，并给顶部留 12px 最小安全边（刘海机不贴边）。
+            // 顶带不透明度提到 0.84，并给顶部留 12px 最小安全边（刘海机不贴边）。
             float topPad = top;   // 不再额外下移：下移会把分数块推进 Boss 面板
             var prev = GUI.color;
-            GUI.color = new Color(0.016f, 0.024f, 0.059f, 0.72f);
+            GUI.color = new Color(0.016f, 0.024f, 0.059f, 0.84f);
             GUI.DrawTexture(R(0, 0, w, 136f * 2f + topPad), UiKit.VeilTop);
             GUI.color = new Color(0.016f, 0.024f, 0.059f, 0.62f);
             GUI.DrawTexture(R(0, RefH - bottom - 118f * 2f, w, 118f * 2f + bottom), UiKit.VeilBottom);
@@ -402,20 +417,24 @@ namespace AuroraRift
 
             // ---- 左上：分数块（eyebrow 18.4 / 数字 31.4 / BEST 58.2 / GRAZE 71.2）----
             // 分数块下面垫一层很淡的底板：无论后面飞过什么，这四行始终可读
-            // 底板只包住 SCORE/数字/BEST/GRAZE 四行（到 78 CSS = 156 ref），
-            // Boss 面板从 168.8 ref 开始，两者留 12 ref 的缝
-            // 硬边切角底板（低模语言）：不用圆角矩形，避免像"贴了张纸"
-            UiKit.Panel(R(pad - 10f, topPad + 26f, 300f, 130f),
-                new Color(0.008f, 0.012f, 0.032f, 0.30f), Line(0.10f), 0f);
+            // 底板包住 SCORE/数字/BEST/GRAZE 四行（到 162 ref），
+            // Boss 面板从 168.8 ref 开始，两者留 6.8 ref 的缝
+            // 硬边切角底板（低模语言）：不用圆角矩形，避免像"贴了张纸"。
+            // 高度必须包住 GRAZE 行（底 160.4），又不能碰到 Boss 卡（顶 168.8）。
+            UiKit.Slab(R(pad - 10f, topPad + 24f, 306f, 138f),
+                new Color(0.008f, 0.012f, 0.032f, 0.34f), Line(0.12f), 18f);
+            UiKit.Line(R(pad - 10f, topPad + 42f, 3f, 100f), new Color(Teal.r, Teal.g, Teal.b, 0.5f));
             Txt(Label(18, Muted, TextAnchor.UpperLeft), R(pad, topPad + 36.8f, 420f, 22f), Sp("SCORE"), Muted);
             Bold(_numBig, R(pad, topPad + 62.8f, 460f, 52f), Mathf.RoundToInt(root.Score).ToString("N0"), Paper, 2f);
-            // BEST/GRAZE 跟着数字的实测字高走，换字号时不会再压行
+            // BEST/GRAZE 跟着数字的实测字高走，但压到网页版 58.2 CSS 的上限，
+            // 否则 50 号字的行高会把 GRAZE 推进 Boss 面板（v0.21.1 实测底边 178.8 > 168.8）。
             float numH = _numBig.CalcSize(new GUIContent("0")).y;
-            float bestY = topPad + 66.8f + numH;
+            float bestY = Mathf.Min(topPad + 66.8f + numH, topPad + 116.4f);
+            float grazeY = Mathf.Max(bestY + 24f, topPad + 140.4f);
             Txt(_tiny, R(pad, bestY, 300f, 20f), "BEST ", Dimc);
             Txt(_small, R(pad + 58f, bestY - 3f, 300f, 22f), root.Best.ToString("N0"), new Color(Gold.r, Gold.g, Gold.b, 0.85f));
-            Txt(_tiny, R(pad, bestY + 26f, 300f, 18f), "GRAZE ", Dimc);
-            Txt(_small, R(pad + 72f, bestY + 24f, 300f, 20f), root.Stats.Graze.ToString(), Teal);
+            Txt(_tiny, R(pad, grazeY, 300f, 18f), "GRAZE ", Dimc);
+            Txt(_small, R(pad + 72f, grazeY - 2f, 300f, 20f), root.Stats.Graze.ToString(), Teal);
 
             // ---- 中上：星区（eyebrow 19.4 / 数字 31.4 / 区名 50.4）----
             if (dir != null)
@@ -447,7 +466,8 @@ namespace AuroraRift
             if (dir != null && dir.Boss != null) DrawBossPanel(root, w, top, dir.Boss);
             if (p != null) DrawBottom(root, w, bottom);
 
-            if (root.State != GameState.Dead)
+            // 只在真正游玩时画公告/提示：暂停与结算页后面再飘一条教学胶囊会很乱
+            if (root.State == GameState.Playing)
             {
                 DrawAnnounce(root, w, top);
                 DrawHintToast(root, w, bottom);
@@ -683,17 +703,17 @@ namespace AuroraRift
         {
             Dim();
             float cardW = Mathf.Min(680f, w - 80f);
-            float cardH = 960f;
+            float cardH = 1000f;
             var card = Cx(w * 0.5f, RefH * 0.5f, cardW, cardH);
             UiKit.Panel(card, new Color(0.063f, 0.094f, 0.188f, 0.94f), Line(0.14f), 16f);
             UiKit.Line(R(card.x + 28f, card.y + 1f, card.width - 56f, 2f), new Color(1f, 1f, 1f, 0.05f));
 
             float x = card.x + 44f, y = card.y + 40f;
-            Txt(_eyebrow, R(x, y, 400f, 24f), Sp("SYSTEM HOLD"), Dimc);
+            Txt(_eyebrow, R(x, y, 400f, 24f), Sp("SYSTEM HOLD"), Muted);
             y += 34f;
             Bold(_h1c, R(x, y, card.width - 88f, 70f), "已暂停", Paper, 2f);
             y += 74f;
-            Txt(_h2, R(x, y, card.width - 88f, 30f), "引擎待命。深空仍在呼吸。", Dimc);
+            Txt(_h2, R(x, y, card.width - 88f, 30f), "引擎待命。深空仍在呼吸。", Muted);
             y += 46f;
 
             // 装配摘要
@@ -735,7 +755,7 @@ namespace AuroraRift
 
             var quit = R(x, y, card.width - 88f, 96f);
             UiKit.Panel(quit, new Color(0.047f, 0.075f, 0.149f, 0.45f), Line(0.2f), 6f);
-            Txt(Label(19, Dimc, TextAnchor.MiddleCenter), quit, "返回基地", Dimc);
+            Txt(Label(19, Muted, TextAnchor.MiddleCenter), quit, "返回基地", Muted);
             if (GUI.Button(quit, GUIContent.none, _invisible)) root.BackToMenu();
             y += 112f;
 
@@ -787,7 +807,7 @@ namespace AuroraRift
 
             // 原版结算是一张 340px 宽的面板卡，整张垂直居中（不是贴顶排一条长列）
             const float cardW = 680f;
-            float cardH = 1040f;
+            float cardH = 980f;
             var card = Cx(cx, RefH * 0.5f, cardW, cardH);
             UiKit.Panel(card, new Color(0.035f, 0.055f, 0.117f, 0.96f), Line(0.18f), 20f);
             UiKit.Line(R(card.x + 56f, card.y + 1f, card.width - 112f, 2f), new Color(1f, 1f, 1f, 0.06f));
@@ -866,7 +886,7 @@ namespace AuroraRift
 
             var menu = Cx(cx, y + 140f, card.width - 88f, 48f);
             UiKit.Panel(menu, new Color(0.047f, 0.075f, 0.149f, 0.5f), Line(0.18f), 6f);
-            Txt(Label(17, Dimc, TextAnchor.MiddleCenter), menu, "返回基地", Dimc);
+            Txt(Label(17, Muted, TextAnchor.MiddleCenter), menu, "返回基地", Muted);
             if (GUI.Button(menu, GUIContent.none, _invisible)) root.BackToMenu();
         }
 

@@ -36,3 +36,6 @@ backups/
 
 # Blender 渲染中间产物（可重跑，不入库）
 artgen/blender/out/
+
+# Python 缓存
+__pycache__/

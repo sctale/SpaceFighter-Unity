@@ -256,3 +256,58 @@ Unity 侧 `ShipArt.cs` 的约定：`Resources.Load("Ships/<name>")` → `ppu = t
 | 机体能实时转向、受光、换材质 | A | 真网格进 Unity，代价是重做视觉层与性能验证 |
 | 画面精致但玩法/性能不动 | **B（当前）** | 只是贴图替换，判定、包体结构、HUD 全不变 |
 | 需要大量同风格小件（弹体/箱子） | B | 数据驱动，加一段 spec 就多一个资产 |
+
+---
+
+## 外部低模资产源：Polyfork（实测 2026-11-04）
+
+> 官方站：https://polyfork.dev · 太空套件：https://polyfork.dev/kit/spaceship-wars-kit-234642
+> 定位：低模资产库（**不是 Blender 插件**）。低模全部免费、可商用、免署名；FBX/GLB 直接下，无需账号。
+> 它和 A/B 是正交的：资产既可走 A 进 Unity 实时渲染，也可走 B 渲成 2D 精灵。
+
+### 价格与授权
+
+| 档位 | 价格 | 说明 |
+|---|---|---|
+| Free | $0 | 2,978 个低模全部免费；FBX / GLB / USDZ / OBJ；可商用、免署名；可整套下载 kit |
+| Pro | $15/月；$100 买断（限 200 席，原价 $125） | 解锁 HD/PBR 版、自有 CDN、remix 烘焙等；**Low Poly 管线用不到** |
+| Platform | $299/月起 | 把资产托管给自己产品的用户时才需要；游戏内打包资产不属于此类 |
+
+授权要点：
+
+- 可以：商用、修改、放进游戏/客户端作品，免署名，永久。
+- 不可以：把原始资产单独转售或再分发（含上传素材站、网盘、模板库），或用它训练商业 3D 资产生成器。
+- 游戏可以随包携带模型；**原始 FBX/GLB 不要作为独立素材公开分发**。
+- 免费资产的 `.mjs` 源码需要免费账号；FBX / GLB / CDN 无需账号。HD 版需要 Pro key。
+
+### 太空套件实测
+
+- `Spaceship Wars Kit`：**29 个部件，全部免费**，480–4,320 tris；统一调色板与米制比例。
+- 舰船：Scout 3,418 / Interceptor 3,570 / Alien Raider 3,632 / Gunship 3,638 / Agile Starfighter 3,707 / Heavy Bomber 3,826 / Cargo Freighter 4,310 / Capital Cruiser 4,320 tris。
+- 小件：Space Mine 480 / Fuel Drum 522 / Asteroid 530–754 / Missile 634 / Defense Turret 636 / Supply Crate 538 / Escape Pod 630 等，适合敌机与场景。
+- 多数资产带可动部件（机翼、喷口），FBX 导入 Unity 后是独立子物体，可直接做动画。
+
+**样例 Interceptor（`interceptor-9d2289`）实测**：
+
+- Blender 4.5：3,570 tris，8 个命名材质（hull / trim / plating / recess / steel / glass / lamp / thruster）。
+- Unity 6（6000.3.10f1）：21 个网格、6,509 verts、3,570 tris、8 材质、世界包围盒 **5.96 × 2.50 × 9.00 m**。
+- **根节点旋转 0（Y-up，机头 +Z）**；这和我们自己从 Blender 导出的 FBX（根节点 -90°X，机头 -Z）不同，两条来源混用时注意朝向。
+
+### 接入当前管线
+
+- **A（实时 3D）**：直接下 FBX。资产是真实米制，9 m 的船在 10 单位宽的战场里缩放约 **0.15–0.2**；一艘船 8 个材质，同屏敌机多时 draw call 偏高——优先把 480–1,500 tris 的小件给敌机，3.4k–4.3k 的舰船给玩家/Boss，或在 Blender/Unity 里合并材质。
+- **B（渲 2D 精灵）**：导入 FBX，按 B3 的相机/灯光渲。先按约 0.2 缩放到 `ortho_scale = 2.0` 的视野，再用 `fit_to_contract()` 精调；可动部件先摆好姿态再渲。
+- **改色**：Polyfork 默认是红灰帝国配色，与游戏的青紫霓虹不符；FBX 已把顶点色烘成 8 个命名材质，直接改 `hull / trim / plating / ...` 的 Base Color 即可，不需要重做 UV。
+- **取用（无需账号）**：
+
+```bash
+# 搜索免费太空资产
+curl "https://polyfork.dev/api/assets?q=spaceship&free=1&per_page=100"
+
+# 直接下 FBX / GLB
+curl -L -o interceptor.fbx https://polyfork.dev/dl/interceptor-9d2289.fbx
+curl -L -o interceptor.glb https://polyfork.dev/cdn/interceptor-9d2289.glb
+```
+
+- **MCP**：远端 HTTP 端点 `https://polyfork.dev/mcp`，免费资产无需 key；接进 Qoder 后可直接搜资产/拿元数据。接入前先确认 Qoder 的远端 MCP 配置格式。
+- **已下载样例**：`D:\V-Coding\.blender-setup\polyfork\interceptor-9d2289.fbx`（仅本机验证用，未进仓库）。

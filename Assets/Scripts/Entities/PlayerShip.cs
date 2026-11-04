@@ -498,6 +498,7 @@ namespace AuroraRift
                 Invuln = Mathf.Max(Invuln, GameConfig.InvulnAfterReflect);
                 AddNovaRaw(GameConfig.NovaOnReflectSave);
                 CameraShake.Instance?.Shake(0.16f, 0.24f);
+                Hud.Instance?.HitFx(new Color(1f, 0.82f, 0.48f), 0.55f);
                 Impact.Spawn(transform.position, new Color(1f, 0.82f, 0.48f, 0.95f), 0.9f, 0.3f);
                 root?.ClearEnemyBullets(true);
                 root?.Hitstop(GameConfig.FreezeHit);            // 原版这里钉 50ms
@@ -511,6 +512,7 @@ namespace AuroraRift
                 Invuln = Mathf.Max(Invuln, GameConfig.InvulnAfterShield);
                 AddNovaRaw(GameConfig.NovaOnShieldBreak);
                 CameraShake.Instance?.Shake(0.11f, 0.2f);
+                Hud.Instance?.HitFx(new Color(0.61f, 0.55f, 1f), 0.75f);
                 Impact.Spawn(transform.position, new Color(0.61f, 0.55f, 1f, 0.9f), 0.7f, 0.25f);
                 root?.Hitstop(GameConfig.FreezeHit);
                 return;
@@ -532,6 +534,7 @@ namespace AuroraRift
                 else { root.Slowmo(GameConfig.SlowDeathDur, GameConfig.SlowDeathScale); root.Announce("SIGNAL LOST", "战机信号中断", 1.8f, true); }
             }
             CameraShake.Instance?.Shake(0.24f, 0.34f);
+            Hud.Instance?.HitFx(new Color(1f, 0.22f, 0.38f), 1f);
             Impact.Spawn(transform.position, new Color(1f, 0.44f, 0.57f, 0.95f), 1.1f, 0.34f);
             // 掉命后回到出生点，避免停在弹幕里
             if (Hull > 0)
@@ -541,7 +544,11 @@ namespace AuroraRift
                 _dragging = false;
                 _fingerId = -1;
             }
-            if (Hull <= 0) root?.OnPlayerDead();
+            if (Hull <= 0)
+            {
+                Debris.Burst(transform.position, GameConfig.Teal, 0.3f, 8, 0.75f);
+                root?.OnPlayerDead();
+            }
         }
 
         public void AddNova(float v)

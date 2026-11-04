@@ -14,6 +14,9 @@ namespace AuroraRift
     public class DevShots : MonoBehaviour
     {
         static readonly float[] Times = { 1.6f, 3.2f, 5.0f, 7.0f };
+        // -long：等第一波击杀与补给箱落地后再拍，用来验收碎片/箱体这类中局元素
+        static readonly float[] LongTimes = { 1.6f, 6.5f, 10.5f, 14.5f };
+        float[] _times = Times;
         float _clock;
         int _index;
         bool _quitAfter;
@@ -57,6 +60,7 @@ namespace AuroraRift
             d._pause = pause;
             d._dead = dead;
             d._quitAfter = Array.IndexOf(args, "-autoshot") >= 0;
+            if (Array.IndexOf(args, "-long") >= 0) d._times = LongTimes;
             d._dir = Path.Combine(Directory.GetCurrentDirectory(), "docs", "shots");
             d._tag = Arg(args, "-tag") ?? ("zone" + (Arg(args, "-zone") ?? "1"));
             d._move = Arg(args, "-move");
@@ -152,7 +156,7 @@ namespace AuroraRift
             if (!_shots) return;
 
             if (_startNextFrame) { _startNextFrame = false; GameRoot.Instance?.StartRun(); return; }
-            if (_index < Times.Length && _clock >= Times[_index])
+            if (_index < _times.Length && _clock >= _times[_index])
             {
                 string file = $"auto_{_tag}_{_index}.png";
                 ScreenCapture.CaptureScreenshot(Path.Combine(_dir, file));
@@ -160,7 +164,7 @@ namespace AuroraRift
                 // 第 0 张是开始菜单，之后自动开局拍实战
                 if (_index == 0) _startNextFrame = true;
                 _index++;
-                if (_index >= Times.Length && _quitAfter) _quitAt = _clock + 1.2f;
+                if (_index >= _times.Length && _quitAfter) _quitAt = _clock + 1.2f;
             }
             if (_quitAt > 0f && _clock >= _quitAt)
             {

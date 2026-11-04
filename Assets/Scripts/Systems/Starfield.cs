@@ -84,7 +84,7 @@ namespace AuroraRift
         void BuildNebula()
         {
             var tex = ShipArt.Get("bullet_glow_soft", 1f) ?? RuntimeSprites.Disc(64);
-            _nebula = new SpriteRenderer[5];
+            _nebula = new SpriteRenderer[7];
             var root = new GameObject("Nebula").transform;
             root.SetParent(transform, false);
             for (int i = 0; i < _nebula.Length; i++)
@@ -94,8 +94,10 @@ namespace AuroraRift
                 var sr = go.AddComponent<SpriteRenderer>();
                 sr.sprite = tex;
                 sr.sortingOrder = -60;
-                float w = Random.Range(9f, 22f);
-                go.transform.localScale = new Vector3(w, w * Random.Range(0.55f, 0.9f), 1f);
+                // 拉长 + 斜置：圆光斑会被看成"糊了一块"，横向云带才像星云
+                float w = Random.Range(10f, 26f);
+                go.transform.localScale = new Vector3(w * Random.Range(1.25f, 2.2f), w * Random.Range(0.45f, 0.8f), 1f);
+                go.transform.rotation = Quaternion.Euler(0f, 0f, Random.Range(-30f, 30f));
                 go.transform.position = new Vector3(
                     Random.Range(-GameConfig.PlayHalfWidth, GameConfig.PlayHalfWidth),
                     Random.Range(-GameView.HalfHeight, GameView.HalfHeight), 0f);
@@ -129,7 +131,7 @@ namespace AuroraRift
                         p.y = GameView.HalfHeight + 6f;
                     sr.transform.position = p;
                     var c = _current * 0.9f;
-                    sr.color = new Color(c.r, c.g, c.b, 0.055f + 0.02f * (i % 3));
+                    sr.color = new Color(c.r, c.g, c.b, 0.032f + 0.014f * (i % 3));
                 }
             }
 

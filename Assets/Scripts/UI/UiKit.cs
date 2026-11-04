@@ -262,6 +262,69 @@ namespace AuroraRift
         /// <summary>胶囊（全圆角）。</summary>
         public static void Pill(Rect r, Color fill, Color border) => Panel(r, fill, border, r.height * 0.5f);
 
+        static readonly System.Collections.Generic.Dictionary<long, Texture2D> _slabs = new();
+
+        /// <summary>切角八边形底板（低模语言）：四角各切一刀，替掉 HUD 里的圆角矩形。</summary>
+        public static void Slab(Rect r, Color fill, Color border, float cut = 16f)
+        {
+            if (r.width < 2f || r.height < 2f) return;
+            var prev = GUI.color;
+            if (fill.a > 0.001f)
+            {
+                GUI.color = fill;
+                GUI.DrawTexture(r, SlabTex(r.width, r.height, cut, true));
+            }
+            if (border.a > 0.001f)
+            {
+                GUI.color = border;
+                GUI.DrawTexture(r, SlabTex(r.width, r.height, cut, false));
+            }
+            GUI.color = prev;
+        }
+
+        static Texture2D SlabTex(float fw, float fh, float cut, bool fill)
+        {
+            int w = Mathf.Max(4, Mathf.RoundToInt(fw));
+            int h = Mathf.Max(4, Mathf.RoundToInt(fh));
+            cut = Mathf.Clamp(cut, 0f, Mathf.Min(w, h) * 0.5f - 1f);
+            long key = ((long)w << 40) ^ ((long)h << 20) ^ (long)(cut * 10f) ^ (fill ? 0x2000000000000000L : 0L);
+            if (_slabs.TryGetValue(key, out var tex) && tex != null) return tex;
+            if (_slabs.Count > 120) _slabs.Clear();
+
+            tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var px = new Color32[w * h];
+            for (int y = 0; y < h; y++)
+                for (int x = 0; x < w; x++)
+                {
+                    float acc = 0f, accIn = 0f;
+                    for (int sy = 0; sy < 2; sy++)
+                        for (int sx = 0; sx < 2; sx++)
+                        {
+                            float fx = x + 0.25f + sx * 0.5f;
+                            float fy = y + 0.25f + sy * 0.5f;
+                            if (InOctagon(fx, fy, w, h, cut)) acc += 0.25f;
+                            if (InOctagon(fx, fy, w, h, cut - 1.6f)) accIn += 0.25f;
+                        }
+                    byte alpha = fill ? (byte)(acc * 255f)
+                                      : (byte)(Mathf.Clamp01(acc - accIn) * 255f);
+                    px[y * w + x] = new Color32(255, 255, 255, alpha);
+                }
+            tex.SetPixels32(px); tex.Apply();
+            _slabs[key] = tex;
+            return tex;
+        }
+
+        static bool InOctagon(float x, float y, int w, int h, float cut)
+        {
+            if (x < 0f || y < 0f || x > w || y > h) return false;
+            if (cut <= 0f) return true;
+            float tl = x + y;
+            float tr = (w - x) + y;
+            float bl = x + (h - y);
+            float br = (w - x) + (h - y);
+            return tl >= cut && tr >= cut && bl >= cut && br >= cut;
+        }
+
         /// <summary>环形充能：从 12 点顺时针填充 pct（0..1）。</summary>
         public static void Arc(Rect r, float pct, Color color, float thickness = 3f)
         {
@@ -340,10 +403,11 @@ namespace AuroraRift
             GUI.color = prev;
         }
 
-        public static void Vignette(Rect r, float alpha)
+        public static void Vignette(Rect r, float alpha, Color? tint = null)
         {
             var prev = GUI.color;
-            GUI.color = new Color(0f, 0f, 0f, alpha);
+            var c = tint ?? new Color(0f, 0f, 0f);
+            GUI.color = new Color(c.r, c.g, c.b, alpha);
             GUI.DrawTexture(r, VignetteTex);
             GUI.color = prev;
         }
