@@ -590,6 +590,18 @@ def build_player_prism(accent):
     objs.append(poly_prism("canopy", _octagon(0.07, 1.9, 12), 0.06, 0.10, glass, 0.010))
     for sx in (-1, 1):
         objs.append(box("nozzle", (0.06, 0.14, 0.05), (sx * 0.05, 0.62, 0.05), neon, 0.0))
+    # 装甲分件（对齐 interceptor 的零件密度）：脊背压板、尾板、翼根进气、翼炮、铆点
+    objs.append(poly_prism("back_plate", [(0, -0.60), (0.045, -0.30), (0.052, 0.34),
+                                          (0.036, 0.60), (0, 0.66), (-0.036, 0.60),
+                                          (-0.052, 0.34), (-0.045, -0.30)],
+                           0.06, 0.085, armor, 0.008))
+    objs.append(box("tail_plate", (0.22, 0.07, 0.03), (0, 0.66, 0.045), armor, 0.006))
+    for sx in (-1, 1):
+        objs.append(box("intake", (0.055, 0.14, 0.055), (sx * 0.13, -0.12, 0.01), dark, 0.006))
+        objs.append(box("gun_pod", (0.045, 0.20, 0.055), (sx * 0.47, 0.12, 0.035), dark, 0.006))
+    for i in range(3):
+        objs.append(box("greeble", (0.024, 0.02, 0.03),
+                        (-0.015 + (i % 2) * 0.03, 0.36 + i * 0.055, 0.092), dark, 0.003))
     return flip_180(objs), []
 
 
@@ -617,6 +629,18 @@ def build_player_swarm(accent):
     for sx in (-1, 1):
         for i in range(3):
             objs.append(cyl("missile", 0.018, 0.10, (sx * 0.33, -0.02 + i * 0.11, 0.085), neon, 8))
+    # 装甲分件：脊背压板、尾板、翼梁、舱侧进气、铆点——把"两个筒"补成机体
+    objs.append(poly_prism("back_plate", [(0, -0.56), (0.06, -0.24), (0.075, 0.30),
+                                          (0.05, 0.58), (0, 0.64), (-0.05, 0.58),
+                                          (-0.075, 0.30), (-0.06, -0.24)],
+                           0.06, 0.085, armor, 0.008))
+    objs.append(box("tail_plate", (0.28, 0.075, 0.03), (0, 0.64, 0.045), armor, 0.006))
+    for sx in (-1, 1):
+        objs.append(box("pylon", (0.18, 0.075, 0.045), (sx * 0.17, 0.34, 0.02), dark, 0.005))
+        objs.append(box("intake", (0.05, 0.13, 0.05), (sx * 0.30, -0.40, 0.03), dark, 0.005))
+    for i in range(3):
+        objs.append(box("greeble", (0.026, 0.02, 0.03),
+                        (-0.015 + (i % 2) * 0.03, 0.36 + i * 0.05, 0.092), dark, 0.003))
     return flip_180(objs), []
 
 
@@ -778,18 +802,33 @@ CRATE_TINT = {
 }
 
 
+def _chamfer_square(half, cut):
+    """切角方箱的俯视轮廓：正方形四角各切一刀（低模硬边，不用圆角）。"""
+    return [(-half + cut, -half), (half - cut, -half), (half, -half + cut), (half, half - cut),
+            (half - cut, half), (-half + cut, half), (-half, half - cut), (-half, -half + cut)]
+
+
 def build_crate(name):
-    """补给箱：六边形胶囊 + 自发光图徽（俯视下靠图徽分辨种类）。"""
+    """补给箱：切角方箱 + 四条霓虹边条 + 自发光图徽（俯视下靠图徽分辨种类）。"""
     tint = hex_rgb(CRATE_TINT[name])
-    hull = mat_pbr("crate_hull", (0.040, 0.050, 0.075), 0.90, 0.30)
-    band = mat_pbr("crate_band", (0.075, 0.090, 0.125), 0.85, 0.38)
+    hull = mat_pbr("crate_hull", (0.065, 0.078, 0.105), 0.90, 0.30)
+    band = mat_pbr("crate_band", (0.115, 0.130, 0.165), 0.85, 0.38)
     neon = mat_emit("crate_neon", tint, 1.30)
     objs = [
-        poly_prism("base", _octagon(0.72, 1.0, 6, math.pi / 6), -0.10, 0.08, hull, 0.02),
-        poly_prism("lid", _octagon(0.52, 1.0, 6, math.pi / 6), 0.08, 0.13, band, 0.012),
-        arc_ring("trim", 0.56, 0.64, 0, 2 * math.pi, 0.08, 0.11, neon, seg=36, bevel=0.0),
+        poly_prism("base", _chamfer_square(0.70, 0.24), -0.10, 0.08, hull, 0.02),
+        poly_prism("lid", _chamfer_square(0.52, 0.17), 0.08, 0.13, band, 0.012),
+        # 方形霓虹边条替掉原来的圆环：远看是"箱"，不是"徽章"
+        box("edge_t", (0.74, 0.042, 0.035), (0, 0.60, 0.15), neon, 0.0),
+        box("edge_b", (0.74, 0.042, 0.035), (0, -0.60, 0.15), neon, 0.0),
+        box("edge_l", (0.042, 0.74, 0.035), (-0.60, 0, 0.15), neon, 0.0),
+        box("edge_r", (0.042, 0.74, 0.035), (0.60, 0, 0.15), neon, 0.0),
     ]
-    glyph_z = (0.13, 0.17)
+    # 四角金属压条：让方箱有"加固件"的机械感
+    for sx in (-1, 1):
+        for sy in (-1, 1):
+            objs.append(box("brace_x", (0.20, 0.05, 0.03), (sx * 0.50, sy * 0.645, 0.145), band, 0.0))
+            objs.append(box("brace_y", (0.05, 0.20, 0.03), (sx * 0.645, sy * 0.50, 0.145), band, 0.0))
+    glyph_z = (0.155, 0.195)
     if name == "crate_weapon":
         for i in range(2):
             s = 0.30 - i * 0.10
@@ -799,24 +838,24 @@ def build_crate(name):
     elif name == "crate_swarm":
         # 三个点（蜂群），与武器箱的双箭头区分开
         for dx, dy in ((-0.20, 0.16), (0.20, 0.16), (0, -0.18)):
-            objs.append(cyl("dot", 0.11, 0.06, (dx, dy, 0.15), neon, 12, bevel=0.0))
+            objs.append(cyl("dot", 0.11, 0.06, (dx, dy, 0.175), neon, 12, bevel=0.0))
     elif name == "crate_shield":
         objs.append(poly_prism("sh", [(-0.26, 0.22), (0.26, 0.22), (0.26, -0.06),
                                       (0, -0.30), (-0.26, -0.06)], glyph_z[0], glyph_z[1], neon, 0.0))
     elif name == "crate_drone":
         objs.append(poly_prism("core", _octagon(0.14, 1.0, 8), glyph_z[0], glyph_z[1], neon, 0.0))
         for sx in (-1, 1):
-            objs.append(box("wing", (0.22, 0.09, 0.04), (sx * 0.24, 0.04, 0.15), neon, 0.0))
+            objs.append(box("wing", (0.22, 0.09, 0.04), (sx * 0.24, 0.04, 0.175), neon, 0.0))
     elif name == "crate_prism":
         objs.append(poly_prism("tri", [(0, 0.26), (0.28, -0.22), (-0.28, -0.22)],
                                glyph_z[0], glyph_z[1], neon, 0.0))
     elif name == "crate_reflect":
         objs.append(arc_ring("ring_g", 0.16, 0.26, 0, 2 * math.pi, glyph_z[0], glyph_z[1],
                              neon, seg=28, bevel=0.0))
-        objs.append(box("bar", (0.08, 0.44, 0.04), (0, 0, 0.15), neon, 0.0))
+        objs.append(box("bar", (0.08, 0.44, 0.04), (0, 0, 0.175), neon, 0.0))
     elif name == "crate_life":
-        objs.append(box("v", (0.10, 0.44, 0.04), (0, 0, 0.15), neon, 0.0))
-        objs.append(box("h", (0.36, 0.10, 0.04), (0, 0.02, 0.15), neon, 0.0))
+        objs.append(box("v", (0.10, 0.44, 0.04), (0, 0, 0.175), neon, 0.0))
+        objs.append(box("h", (0.36, 0.10, 0.04), (0, 0.02, 0.175), neon, 0.0))
     elif name == "crate_swap":
         for sx in (-1, 1):
             objs.append(poly_prism("arr", [(sx * 0.06, 0.26), (sx * 0.28, 0.0), (sx * 0.06, -0.26)],
@@ -824,7 +863,7 @@ def build_crate(name):
     elif name == "crate_gem":
         objs.append(poly_prism("gem", [(0, 0.30), (0.22, 0.06), (0, -0.26), (-0.22, 0.06)],
                                glyph_z[0], glyph_z[1], neon, 0.0))
-        objs.append(box("facet", (0.06, 0.50, 0.02), (0, 0, 0.18), mat_emit("gem_pin", (1.0, 0.98, 0.90), 1.7), 0.0))
+        objs.append(box("facet", (0.06, 0.50, 0.02), (0, 0, 0.205), mat_emit("gem_pin", (1.0, 0.98, 0.90), 1.7), 0.0))
     return objs, []
 
 
