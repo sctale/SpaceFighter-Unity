@@ -21,6 +21,15 @@ namespace AuroraRift
 
         const float RefH = 1920f;
 
+        // ---------------------------------------------------------------- 左上分数块排版
+        // 全部是 1920 参考坐标。门禁 beh.hudScore.* 直接读这几个常量，改任何一项都会先被断言拦下。
+        public const float ScoreTop = 62.8f;    // 50 号分数的排版框顶
+        public const float ScoreBoxH = 52f;     // 排版框高＝视觉行距（比字体行盒矮，靠 FitLine 补齐）
+        public const float BestTop = 120.8f;    // BEST 行框顶
+        public const float GrazeTop = 146.8f;   // GRAZE 行框顶
+        public const float DigitInk = 55.2f;    // 实测：数字墨迹底 = ScoreTop + 55.2
+        public const float BestInk = 7.6f;      // 实测：BEST 行墨迹顶 = BestTop + 7.6
+
         // ---------------------------------------------------------------- 设计令牌
         static Color Ink0 => GameConfig.Hex("04060F");
         static Color Paper => GameConfig.Hex("F3F8FF");
@@ -185,8 +194,26 @@ namespace AuroraRift
             var style = st;
             if (anchor.HasValue && st.alignment != anchor.Value)
                 style = new GUIStyle(st) { alignment = anchor.Value };
-            GUI.Label(r, s, style);
+            GUI.Label(FitLine(r, style.fontSize, style.alignment), s, style);
             GUI.color = prev;
+        }
+
+        /// <summary>
+        /// AuroraCJK 的行盒约 1.5em，而排版框是按"视觉行距"给的（比行盒矮）。
+        /// 样式是 TextClipping.Clip，IMGUI 就把超出排版框的部分直接切掉——
+        /// 数字下半截被切出一条横线，看起来就像"分数被最高分挡住了"（用户反馈三次，真因在这里）。
+        /// 这里只把裁剪框补到行盒高度，字形位置一律不动：
+        /// 上对齐时行盒本来就贴顶；居中对齐时把框上下各扩一半，中心不变。
+        /// </summary>
+        public const float LineBox = 1.5f;
+
+        public static Rect FitLine(Rect r, int fontSize, TextAnchor anchor)
+        {
+            float need = Mathf.Max(1, fontSize) * LineBox;
+            if (r.height >= need) return r;
+            float add = need - r.height;
+            bool upper = anchor == TextAnchor.UpperLeft || anchor == TextAnchor.UpperCenter || anchor == TextAnchor.UpperRight;
+            return new Rect(r.x, upper ? r.y : r.y - add * 0.5f, r.width, need);
         }
 
         /// <summary>粗体感：同一串字叠画一次微小偏移（Noto 只有 Regular 字重）。</summary>
@@ -348,7 +375,7 @@ namespace AuroraRift
             }
 
             Txt(_tiny, Center(w, RefH - bottom - 24f, 900f, 24f),
-                Sp("v0.21.6") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
+                Sp("v0.21.7") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
         }
 
         /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
@@ -415,20 +442,19 @@ namespace AuroraRift
             GUI.DrawTexture(R(0, RefH - bottom - 118f * 2f, w, 118f * 2f + bottom), UiKit.VeilBottom);
             GUI.color = prev;
 
-            // ---- 左上：分数块（eyebrow 18.4 / 数字 31.4 / BEST 58.2 / GRAZE 71.2）----
-            // 分数块下面垫一层很淡的底板：无论后面飞过什么，这四行始终可读
-            // 底板包住 SCORE/数字/BEST/GRAZE 四行（到 178 ref），
-            // Boss 面板从 180.8 ref 开始，两者留 2.8 ref 的缝。
-            // 硬边切角底板（低模语言）：不用圆角矩形，避免像"贴了张纸"。
-            UiKit.Slab(R(pad - 10f, topPad + 24f, 306f, 154f),
+            // ---- 左上：分数块 ----
+            // 行距按网页版的"墨迹间距"折算（不是排版框间距）：IMGUI 会把字体 Leading 留在框顶，
+            // 50 号数字的墨迹底落在 ScoreTop+55.2，BEST 行墨迹顶在 BestTop+7.6，
+            // 两者之间要留出 CSS(line-height:1 的 24.8 + gap 2) 折出来的 10.4。
+            // 底板包住四行到 172，Boss 卡从 180.8 起，中间留 8.8 的缝。
+            UiKit.Slab(R(pad - 10f, topPad + 24f, 306f, 148f),
                 new Color(0.008f, 0.012f, 0.032f, 0.34f), Line(0.12f), 18f);
-            UiKit.Line(R(pad - 10f, topPad + 42f, 3f, 112f), new Color(Teal.r, Teal.g, Teal.b, 0.5f));
+            UiKit.Line(R(pad - 10f, topPad + 42f, 3f, 100f), new Color(Teal.r, Teal.g, Teal.b, 0.5f));
             Txt(Label(18, Muted, TextAnchor.UpperLeft), R(pad, topPad + 36.8f, 420f, 22f), Sp("SCORE"), Muted);
-            Bold(_numBig, R(pad, topPad + 62.8f, 460f, 52f), Mathf.RoundToInt(root.Score).ToString("N0"), Paper, 2f);
-            // BEST 固定压到数字框下方 15.6 ref（用户连续反馈：贴着分数底边，像被最高分挡住）。
-            // 不再按 CalcSize 行高推算——50 号字的行高比数字视觉底边高，推算会把 BEST 顶上去。
-            float bestY = topPad + 130.4f;
-            float grazeY = bestY + 25f;
+            Bold(_numBig, R(pad, topPad + ScoreTop, 460f, ScoreBoxH),
+                Mathf.RoundToInt(root.Score).ToString("N0"), Paper, 2f);
+            float bestY = topPad + BestTop;
+            float grazeY = topPad + GrazeTop;
             Txt(_tiny, R(pad, bestY, 300f, 20f), "BEST ", Dimc);
             Txt(_small, R(pad + 58f, bestY - 1f, 300f, 22f), root.Best.ToString("N0"), new Color(Gold.r, Gold.g, Gold.b, 0.85f));
             Txt(_tiny, R(pad, grazeY, 300f, 18f), "GRAZE ", Dimc);

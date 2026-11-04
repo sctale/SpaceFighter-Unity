@@ -26,7 +26,7 @@
   通关必掉箱与 4.4 秒幕间、时间奖励按整区用时。
 - **界面排列按原版实测值**：页边距、顶/底渐变带（真渐变不是硬边）、Boss 面板内缩、
   仪表带五件套互不挤压、公告与提示位置、结算页单卡垂直居中、武器名按等级换叫法。
-- **可回归的数值门禁**：`VerifyNumbers` **425 条**断言，其中一组是**行为断言**
+- **可回归的数值门禁**：`VerifyNumbers` **446 条**断言，其中一组是**行为断言**
   （蓄能每秒掉电量、共鸣门槛四态、Boss 间隔纯函数、编辑态真建敌机量血量与判定半径）——
   上一版只查常量，所以「常量对、代码没生效」的一类 bug 曾全绿通过。
 - **舰船美术全部独立绘制**：玩家三条武器线三套涂装、12 种敌机、3 类僚机、3 台 Boss、7 类弹体、补给箱；金属渐变、装甲倒角、面板刻线、自发光引擎，不再是几何占位图。
@@ -40,7 +40,7 @@
 
 到 [Releases](https://github.com/sctale/SpaceFighter-Unity/releases/latest) 下载：
 
-- `AuroraRift-Unity-v0.21.6.apk`（Android Debug 签名，安装时允许“未知来源”即可）
+- `AuroraRift-Unity-v0.21.7.apk`（Android Debug 签名，安装时允许“未知来源”即可）
 
 桌面版：`Builds/Windows/SpaceFighter.exe`（Unity 构建产物，本地生成）。
 
@@ -67,7 +67,7 @@
 环境：Unity **6000.3.10f1**、Android SDK、NDK **27.2.12479018**、JDK 17（Unity 自带即可）。
 
 ```bash
-# 数值门禁（425 条断言，构建前必跑）
+# 数值门禁（446 条断言，构建前必跑）
 Unity.exe -batchmode -quit -projectPath <project> \
   -executeMethod AuroraRift.EditorTools.VerifyNumbers.Run
 

@@ -573,6 +573,27 @@ namespace AuroraRift.EditorTools
             Check("beh.alias.swarm5", GameConfig.WeaponName("swarm", 5), "蜂后");
             Check("beh.alias.clamp", GameConfig.WeaponName("swarm", 99), "蜂后");
 
+            // ---- HUD 文字裁剪框 ----
+            // 排版框是按"视觉行距"给的，比字体行盒矮；样式是 Clip，IMGUI 于是把字形下半截
+            // 直接切平成一条横线——用户三连反馈"左上角分数被最高分挡住"的真因就在这里。
+            // 补框只允许动裁剪框，字形位置一律不许动。
+            var clipUp = Hud.FitLine(new Rect(36.8f, Hud.ScoreTop, 460f, Hud.ScoreBoxH), 50, TextAnchor.UpperLeft);
+            Check("beh.hudClip.upperKeepY", clipUp.y, Hud.ScoreTop);
+            Check("beh.hudClip.upperGrow", clipUp.height, 50f * Hud.LineBox);
+            CheckTrue("beh.hudClip.coversDigits", clipUp.height >= Hud.DigitInk,
+                      "裁剪框 " + clipUp.height + " 盖不住数字墨迹底 " + Hud.DigitInk + "（会被切出一条横线）");
+            var clipMid = Hud.FitLine(new Rect(0f, 100f, 440f, 40f), 40, TextAnchor.MiddleCenter);
+            Check("beh.hudClip.midCenter", clipMid.y + clipMid.height * 0.5f, 120f);
+            Check("beh.hudClip.midGrow", clipMid.height, 40f * Hud.LineBox);
+            var clipOk = Hud.FitLine(new Rect(0f, 10f, 300f, 90f), 50, TextAnchor.UpperLeft);
+            CheckTrue("beh.hudClip.noShrink", clipOk.height == 90f && clipOk.y == 10f,
+                      "已经放得下的框不许再改，否则整屏行距会跟着漂");
+            // ---- 分数块行距：按"墨迹间距"对标网页版 ----
+            // CSS 是 line-height:1 的 24.8px 数字 + gap 2px，折算成墨迹间距 10.4（1920 参考坐标）
+            Check("beh.hudScore.inkGap", (Hud.BestTop + Hud.BestInk) - (Hud.ScoreTop + Hud.DigitInk), 10.4f, 0.15f);
+            CheckTrue("beh.hudScore.grazeBelow", Hud.GrazeTop > Hud.BestTop + 20f,
+                      "GRAZE 行顶只比 BEST 行顶低 " + (Hud.GrazeTop - Hud.BestTop) + "，会挤成一坨");
+
             // ---- 敌机：把真正的机体建出来量它 ----
             var go = new GameObject("[verify-enemy]");
             try
