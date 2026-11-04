@@ -348,7 +348,7 @@ namespace AuroraRift
             }
 
             Txt(_tiny, Center(w, RefH - bottom - 24f, 900f, 24f),
-                Sp("v0.21.5") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
+                Sp("v0.21.6") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
         }
 
         /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
@@ -417,17 +417,17 @@ namespace AuroraRift
 
             // ---- 左上：分数块（eyebrow 18.4 / 数字 31.4 / BEST 58.2 / GRAZE 71.2）----
             // 分数块下面垫一层很淡的底板：无论后面飞过什么，这四行始终可读
-            // 底板包住 SCORE/数字/BEST/GRAZE 四行（到 166 ref），
-            // Boss 面板从 168.8 ref 开始，两者留 2.8 ref 的缝。
+            // 底板包住 SCORE/数字/BEST/GRAZE 四行（到 178 ref），
+            // Boss 面板从 180.8 ref 开始，两者留 2.8 ref 的缝。
             // 硬边切角底板（低模语言）：不用圆角矩形，避免像"贴了张纸"。
-            UiKit.Slab(R(pad - 10f, topPad + 24f, 306f, 142f),
+            UiKit.Slab(R(pad - 10f, topPad + 24f, 306f, 154f),
                 new Color(0.008f, 0.012f, 0.032f, 0.34f), Line(0.12f), 18f);
-            UiKit.Line(R(pad - 10f, topPad + 42f, 3f, 104f), new Color(Teal.r, Teal.g, Teal.b, 0.5f));
+            UiKit.Line(R(pad - 10f, topPad + 42f, 3f, 112f), new Color(Teal.r, Teal.g, Teal.b, 0.5f));
             Txt(Label(18, Muted, TextAnchor.UpperLeft), R(pad, topPad + 36.8f, 420f, 22f), Sp("SCORE"), Muted);
             Bold(_numBig, R(pad, topPad + 62.8f, 460f, 52f), Mathf.RoundToInt(root.Score).ToString("N0"), Paper, 2f);
-            // BEST 固定压到数字框下方 7.6 ref（用户反馈：贴着分数底边，看着像被最高分挡住）。
+            // BEST 固定压到数字框下方 15.6 ref（用户连续反馈：贴着分数底边，像被最高分挡住）。
             // 不再按 CalcSize 行高推算——50 号字的行高比数字视觉底边高，推算会把 BEST 顶上去。
-            float bestY = topPad + 122.4f;
+            float bestY = topPad + 130.4f;
             float grazeY = bestY + 25f;
             Txt(_tiny, R(pad, bestY, 300f, 20f), "BEST ", Dimc);
             Txt(_small, R(pad + 58f, bestY - 1f, 300f, 22f), root.Best.ToString("N0"), new Color(Gold.r, Gold.g, Gold.b, 0.85f));
@@ -476,7 +476,7 @@ namespace AuroraRift
         {
             // .boss-panel：top = pad+66，左右 = pad，padding 9/11/8，行间 gap 6（CSS px ×2 进 GUI）
             float pad = 36.8f;
-            var card = R(pad, top + 168.8f, w - pad * 2f, 136f);
+            var card = R(pad, top + 180.8f, w - pad * 2f, 136f);
             UiKit.Panel(card, new Color(0.047f, 0.031f, 0.086f, 0.72f), new Color(Rose.r, Rose.g, Rose.b, 0.18f), 16f);
             float inner = 26f;                       // 1px 边框 + 11px 内缩
             float ix = card.x + inner, iw = card.width - inner * 2f;
