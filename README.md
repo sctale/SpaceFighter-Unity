@@ -40,7 +40,7 @@
 
 到 [Releases](https://github.com/sctale/SpaceFighter-Unity/releases/latest) 下载：
 
-- `AuroraRift-Unity-v0.21.2.apk`（Android Debug 签名，安装时允许“未知来源”即可）
+- `AuroraRift-Unity-v0.21.3.apk`（Android Debug 签名，安装时允许“未知来源”即可）
 
 桌面版：`Builds/Windows/SpaceFighter.exe`（Unity 构建产物，本地生成）。
 

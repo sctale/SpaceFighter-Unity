@@ -311,3 +311,19 @@ curl -L -o interceptor.glb https://polyfork.dev/cdn/interceptor-9d2289.glb
 
 - **MCP**：远端 HTTP 端点 `https://polyfork.dev/mcp`，免费资产无需 key；接进 Qoder 后可直接搜资产/拿元数据。接入前先确认 Qoder 的远端 MCP 配置格式。
 - **已下载样例**：`D:\V-Coding\.blender-setup\polyfork\interceptor-9d2289.fbx`（仅本机验证用，未进仓库）。
+
+### 图标专用 3/4 英雄视角（v0.21.3）
+
+图标不再用俯视精灵，而是把同一架 Interceptor 摆成 3/4 再渲：
+
+```bash
+blender --background --factory-startup --python artgen/blender/polyfork_icon.py
+cp artgen/blender/out/icon/hero.png artgen/icon_src/interceptor_hero_3q.png
+python artgen/gen_icon.py
+```
+
+三条经验：
+
+1. **FBX 里有一个 2×2×2 的 `Cube` 占位物**：俯视时藏在机体内部看不出来，3/4 视角会从机背顶出来变成一块黑板。`polyfork_icon.py` 在导入后按名字删掉它。
+2. **抬头 52°、绕 Z 转 160°**：机头朝上、双尾喷在画面下方。不要用 -20°：那个角度尾喷会跑到上方，小尺寸下两个金色喷口容易被读成"眼睛"。
+3. **尾喷对象是 `nozzle-mesh_thruster`**（一条横跨两喷口的薄片）：把它的材质换成暖金自发光，图标里的金色就只落在引擎上，不用后期画光斑。
