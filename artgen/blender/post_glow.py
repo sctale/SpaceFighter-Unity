@@ -61,7 +61,7 @@ ACCENT = {
 }
 
 # 大块机体光晕弱一点、小而快的敌机强一点，避免满屏糊成一片
-STRENGTH = {"boss_": 0.42, "player_": 0.5, "enemy_": 0.78,
+STRENGTH = {"boss_": 0.42, "player_": 0.34, "enemy_": 0.78,
             "bullet_": 0.9, "drone_": 0.55, "crate_": 0.62}
 
 
