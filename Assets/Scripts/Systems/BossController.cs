@@ -1062,6 +1062,7 @@ namespace AuroraRift
                 // 招式永远放不完，Boss 显得"不会还手"。这里保留伤害倍率与破防提示，让招式走完。
                 GameRoot.Instance?.ClearEnemyBullets(false);
                 GameRoot.Instance?.RegisterBreak();
+                Haptics.Medium();
                 GameRoot.Instance?.Hitstop(GameConfig.FreezeHit);   // 原版破防钉 50ms
                 GameRoot.Instance?.Announce("CORE BREAK", "核心破防 · 伤害窗口", 1.2f);
             }

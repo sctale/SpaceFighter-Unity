@@ -360,6 +360,7 @@ namespace AuroraRift
             DashCd = GameConfig.DashCooldown;
             Invuln = Mathf.Max(Invuln, GameConfig.DashInvuln);
             AudioDirector.Instance?.PlayDash();
+            Haptics.Light();
             Impact.Spawn(transform.position, new Color(0.41f, 0.96f, 0.86f, 0.9f), 0.55f, 0.22f);
             CameraShake.Instance?.Shake(0.05f, 0.12f);
             return true;
@@ -374,6 +375,7 @@ namespace AuroraRift
             // 原版星爆：100ms 停顿 + 0.4 秒 0.45 倍速，清屏那一下要有「炸开再落地」的节奏
             GameRoot.Instance?.Hitstop(GameConfig.FreezeNova);
             GameRoot.Instance?.Slowmo(GameConfig.SlowNovaDur, GameConfig.SlowNovaScale);
+            Haptics.Heavy();
             Director.Instance?.NovaBlast(transform.position);
         }
 
@@ -496,6 +498,7 @@ namespace AuroraRift
             {
                 ReflectT = 0f;
                 Invuln = Mathf.Max(Invuln, GameConfig.InvulnAfterReflect);
+                Haptics.Light();
                 AddNovaRaw(GameConfig.NovaOnReflectSave);
                 CameraShake.Instance?.Shake(0.16f, 0.24f);
                 Hud.Instance?.HitFx(new Color(1f, 0.82f, 0.48f), 0.55f);
@@ -510,6 +513,7 @@ namespace AuroraRift
             {
                 Shields--;
                 Invuln = Mathf.Max(Invuln, GameConfig.InvulnAfterShield);
+                Haptics.Medium();
                 AddNovaRaw(GameConfig.NovaOnShieldBreak);
                 CameraShake.Instance?.Shake(0.11f, 0.2f);
                 Hud.Instance?.HitFx(new Color(0.61f, 0.55f, 1f), 0.75f);
@@ -520,6 +524,7 @@ namespace AuroraRift
 
             Hull--;
             Invuln = Mathf.Max(Invuln, GameConfig.InvulnAfterHullHit);
+            Haptics.Heavy();
             AddNovaRaw(GameConfig.NovaOnHullHit);
             Weapons.OnPlayerHit();
             DestroyOneDrone();

@@ -43,7 +43,7 @@ namespace AuroraRift
         static Color Gold => GameConfig.Hex("FFD27A");
         static Color Line(float a) => new Color(0.63f, 0.71f, 1f, a);
 
-        Font _font, _bold;
+        Font _font, _boldFont;
         GUIStyle _eyebrow, _tiny, _small, _body, _num, _numBig, _title, _h1, _h1c, _h2, _center,
                  _right, _btn, _btnBig, _tag, _kbd, _wrap;
 
@@ -65,8 +65,9 @@ namespace AuroraRift
             if (_font == null)
                 _font = Font.CreateDynamicFontFromOSFont(
                     new[] { "Microsoft YaHei", "SimHei", "Noto Sans CJK SC", "Droid Sans Fallback", "sans-serif" }, 28);
-            // 没有粗体字重：用同一字体叠画偏移代替（见 BoldText）
-            _bold = _font;
+            // 标题/数字用随包带的 Noto Sans SC Bold 子集；缺失时回退到 Regular + 叠画
+            _boldFont = Resources.Load<Font>("Fonts/AuroraCJK-Bold");
+            if (_boldFont == null) _boldFont = _font;
         }
 
         void OnGUI()
@@ -154,17 +155,17 @@ namespace AuroraRift
             _tiny = Label(15, Dimc);
             _small = Label(19, Muted);
             _body = Label(21, InkText);
-            _num = Label(40, Paper);
-            _numBig = Label(50, Paper);   // 原版 24.8 CSS；62 会溢出 52 的框、压住 BEST 行
-            _title = Label(118, Paper);
+            _num = Label(40, Paper); _num.font = _boldFont;
+            _numBig = Label(50, Paper); _numBig.font = _boldFont;   // 原版 24.8 CSS；62 会溢出 52 的框、压住 BEST 行
+            _title = Label(110, Paper); _title.font = _boldFont;    // 真粗体比 118 号假粗更紧凑
 
-            _h1 = Label(58, Paper, TextAnchor.MiddleLeft);
-            _h1c = Label(58, Paper, TextAnchor.MiddleCenter);
+            _h1 = Label(58, Paper, TextAnchor.MiddleLeft); _h1.font = _boldFont;
+            _h1c = Label(58, Paper, TextAnchor.MiddleCenter); _h1c.font = _boldFont;
             _h2 = Label(23, Muted, TextAnchor.MiddleLeft);
             _tag = Label(16, Rose, TextAnchor.MiddleCenter);
             _kbd = Label(14, Dimc, TextAnchor.MiddleCenter);
-            _btn = Label(26, InkText, TextAnchor.MiddleCenter);
-            _btnBig = Label(29, new Color(0.02f, 0.06f, 0.11f), TextAnchor.MiddleCenter);
+            _btn = Label(26, InkText, TextAnchor.MiddleCenter); _btn.font = _boldFont;
+            _btnBig = Label(29, new Color(0.02f, 0.06f, 0.11f), TextAnchor.MiddleCenter); _btnBig.font = _boldFont;
 
             var c = Label(21, InkText, TextAnchor.MiddleCenter); _center = c;
             _right = Label(19, Muted, TextAnchor.MiddleRight);
@@ -224,9 +225,17 @@ namespace AuroraRift
             return new Rect(r.x, upper ? r.y : r.y - add * 0.5f, r.width, need);
         }
 
-        /// <summary>粗体感：同一串字叠画一次微小偏移（Noto 只有 Regular 字重）。</summary>
+        /// <summary>
+        /// 粗体：优先用随包带的 Noto Sans SC Bold；字体缺失时才回退到「同字叠画偏移」。
+        /// </summary>
         void Bold(GUIStyle st, Rect r, string s, Color c, float px = 2.4f)
         {
+            if (_boldFont != null)
+            {
+                var bs = st.font == _boldFont ? st : new GUIStyle(st) { font = _boldFont };
+                Txt(bs, r, s, c);
+                return;
+            }
             Txt(st, new Rect(r.x + px * 0.5f, r.y, r.width + px, r.height), s, c);
             Txt(st, new Rect(r.x - px * 0.5f, r.y, r.width + px, r.height), s, c);
         }
@@ -405,7 +414,7 @@ namespace AuroraRift
             }
 
             Txt(_tiny, Center(w, RefH - bottom - 34f, 900f, 24f),
-                Sp("v0.21.9") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc, TextAnchor.MiddleCenter);
+                Sp("v0.21.10") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc, TextAnchor.MiddleCenter);
         }
 
         /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
@@ -784,7 +793,7 @@ namespace AuroraRift
         {
             Dim();
             float cardW = Mathf.Min(680f, w - 80f);
-            float cardH = 1000f;
+            float cardH = 1080f;
             var card = Cx(w * 0.5f, RefH * 0.5f, cardW, cardH);
             UiKit.Glow(Cx(card.center.x, card.center.y, cardW * 1.25f, cardH * 1.12f),
                 new Color(Teal.r, Teal.g, Teal.b, 0.06f));
@@ -823,6 +832,7 @@ namespace AuroraRift
             y = SettingRow(root, x, y, card.width - 88f, "音乐与音效", "程序化合成器音轨", !root.Muted, () => root.ToggleMute());
             y = SettingRow(root, x, y, card.width - 88f, "轻柔特效", "降低闪光与粒子密度", root.LowFx, () => root.ToggleLowFx());
             y = SettingRow(root, x, y, card.width - 88f, "高对比敌弹", "敌弹加白圈，深空更清楚", root.HighContrast, () => root.ToggleHighContrast());
+            y = SettingRow(root, x, y, card.width - 88f, "触感震动", "受击 / 冲刺 / 星爆的短震", root.HapticsEnabled, () => root.ToggleHaptics());
             y += 24f;
 
             var resume = R(x, y, card.width - 88f, 100f);

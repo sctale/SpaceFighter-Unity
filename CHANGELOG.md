@@ -1,5 +1,33 @@
 # 更新记录
 
+## v0.21.10 — 2026-11-05
+
+收口最后两项已知不足：真粗体标题与 Android 触感震动。
+
+### 字体
+
+- 随包新增 `AuroraCJK-Bold.ttf`（Noto Sans SC Bold 子集，OFL），与 Regular 共用同一份
+  1121 字形的 UI 字符集。
+- 标题、分数/结算数字、主/次按钮改用真粗体；Regular 仍用于说明文字与小型标签。
+- `Hud.Bold()` 优先画真粗体，只有 Bold 字体缺失时才回退到旧的「同字叠画偏移」。
+- 菜单大标题 118 → 110，真粗体下更紧凑；`artgen/gen_font.py` 支持一次生成 Regular + Bold 两套子集。
+
+### 触感震动
+
+- 新增 `Haptics`（Android `VibrationEffect`，API 26+；老系统退回 `vibrate(ms)`）：
+  轻（冲刺/拾取/力场挡下）、中（护盾破/核心破防）、重（舰体受创/星爆）。
+- 暂停页新增「触感震动」开关（默认开，`aurora.haptics` 持久化）。
+- 因为 Unity 不会自动声明 VIBRATE，新增 `AndroidManifestVibrateHook`
+  （`IPostGenerateGradleAndroidProject`）；每次导出 Gradle 工程都会自动补权限。
+- `Packages/manifest.json` 补开 `com.unity.modules.androidjni`，保证 `AndroidJavaObject` 可编译。
+
+### 验收
+
+- 540×960 / 1080×1920 实拍确认真粗体标题、数字与四行暂停设置（`docs/shots/auto_v02110*`）。
+- 数值门禁 446/446；Windows 构建 `BUILD_RESULT=Succeeded`。
+- Android 导出后 `launcher/src/main/AndroidManifest.xml` 含 `android.permission.VIBRATE`。
+- APK 信息见 `docs/RELEASE-v0.21.10.md`。
+
 ## v0.21.9 — 2026-11-05
 
 UI 与图标美术精修批次，不改玩法数值。目标是统一表面语言、提高信息对比度，并补完

@@ -181,8 +181,8 @@ namespace AuroraRift.EditorTools
         {
             PlayerSettings.companyName = "sctale";
             PlayerSettings.productName = "Aurora Rift";
-            PlayerSettings.bundleVersion = "0.21.9";
-            PlayerSettings.Android.bundleVersionCode = 37;
+            PlayerSettings.bundleVersion = "0.21.10";
+            PlayerSettings.Android.bundleVersionCode = 38;
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.sctale.spacefighter");
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
             PlayerSettings.allowedAutorotateToPortrait = true;
@@ -208,5 +208,41 @@ namespace AuroraRift.EditorTools
             if (Application.isBatchMode) EditorApplication.Exit(ok ? 0 : 1);
         }
     }
+
+#if UNITY_ANDROID
+    /// <summary>
+    /// Unity 不会自动声明 VIBRATE；导出 Gradle 工程后把权限补进 launcher 清单。
+    /// 这样每次 ExportAndroidProject / BuildAndroid 都会自动生效，不依赖手工改生成目录。
+    /// </summary>
+    public class AndroidManifestVibrateHook : UnityEditor.Android.IPostGenerateGradleAndroidProject
+    {
+        public int callbackOrder => 10;
+
+        public void OnPostGenerateGradleAndroidProject(string path)
+        {
+            string parent = Path.GetDirectoryName(path);
+            string[] candidates =
+            {
+                Path.Combine(path, "src/main/AndroidManifest.xml"),
+                Path.Combine(path, "launcher/src/main/AndroidManifest.xml"),
+                parent == null ? "" : Path.Combine(parent, "launcher/src/main/AndroidManifest.xml"),
+            };
+            foreach (var manifest in candidates) EnsureVibrate(manifest);
+        }
+
+        static void EnsureVibrate(string manifest)
+        {
+            if (string.IsNullOrEmpty(manifest) || !File.Exists(manifest)) return;
+            string text = File.ReadAllText(manifest);
+            if (text.Contains("android.permission.VIBRATE")) return;
+            int at = text.IndexOf("<application", System.StringComparison.Ordinal);
+            if (at < 0) return;
+            string line = "    <uses-permission android:name=\"android.permission.VIBRATE\" />" +
+                          System.Environment.NewLine;
+            File.WriteAllText(manifest, text.Insert(at, line));
+            Debug.Log("[Aurora] VIBRATE permission patched: " + manifest);
+        }
+    }
+#endif
 }
 #endif

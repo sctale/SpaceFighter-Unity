@@ -33,14 +33,14 @@
 - **3 台 Boss 各自独立**：Gatekeeper / Weaver / Helios，本体 + 旋转环 + 呼吸光环 + 核心辉光；受击只闪外圈，持续输出不会把机体洗成灰白。
 - **完整玩法**：三条武器线（蓄能 / 失谐 / 共鸣 / 换线）、擦弹与相位穿弹、冲刺、星爆 NOVA、棱镜力场、过载、三档难度、10 个星区、Boss 22 招、破防与临界、僚机编队、掉落保底。
 - **手机上全部可点**：精准 / 冲刺 / 星爆三枚动作环 + 武器胶囊换线 + 右上暂停，画得出的都点得到。
-- **安卓中文 HUD**：随包带 Noto Sans CJK SC 子集字体（942 字形 / 274KB），修复了旧版手机上 IMGUI 中文整段空白的问题。
+- **安卓中文 HUD**：随包带 Noto Sans CJK SC 的 Regular + Bold 两个子集（约 635KB），修复旧版手机上 IMGUI 中文空白，并让标题/数字用上真粗体。
 - **纯代码搭场景**：仓库不提交场景/预制体，`GameBootstrap` 运行时建相机、玩家、HUD、弹池、导演与星空；CLI 一条命令出包。
 
 ## 下载
 
 到 [Releases](https://github.com/sctale/SpaceFighter-Unity/releases/latest) 下载：
 
-- `AuroraRift-Unity-v0.21.9.apk`（Android Debug 签名，安装时允许“未知来源”即可）
+- `AuroraRift-Unity-v0.21.10.apk`（Android Debug 签名，安装时允许“未知来源”即可）
 
 桌面版：`Builds/Windows/SpaceFighter.exe`（Unity 构建产物，本地生成）。
 
@@ -95,8 +95,9 @@ python artgen/gen_icon.py      # 输出 Assets/Icons/*（构建时进 APK 图标
 ### 重新生成 HUD 中文字体
 
 ```bash
-# 需要 fonttools；字体源用安卓系统的 NotoSansCJK-Regular.ttc（OFL）
-python artgen/gen_font.py <path-to-NotoSansCJK-Regular.ttc>
+# 需要 fonttools；Regular 用安卓系统的 NotoSansCJK-Regular.ttc，
+# Bold 用 Noto Sans SC Bold (TrueType).otf（两者均为 OFL）
+python artgen/gen_font.py <NotoSansCJK-Regular.ttc> "<Noto Sans SC Bold (TrueType).otf>"
 ```
 
 ## 目录
@@ -118,7 +119,7 @@ backups/             # 旧仓库整包备份（本地文件，不进 git）
 
 ## 已知限制
 
-- 触感震动未接（网页版走 Capacitor `haptic`，Unity 需要安卓震动插件）。
+- 触感震动为 Android 原生实现（轻/中/重三档，可在暂停页关闭）；桌面版无震动硬件，开关仅对移动端生效。
 - 背景/星空仍是各星区独立主题的简化实现，原版 `background.js` 的逐层视差尚未完全复刻。
 - 自适应图标只覆盖 `app_icon.xml`（Unity 的清单引用名），圆形图标沿用同一张前景。
 - APK 使用 Android Debug 签名，只适合个人/家庭安装；上架应用商店需换正式 keystore。

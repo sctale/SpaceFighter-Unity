@@ -45,6 +45,7 @@ namespace AuroraRift
         public bool LowFx { get; private set; }
         public bool HighContrast { get; private set; }
         public bool Muted { get; private set; }
+        public bool HapticsEnabled { get; private set; }
 
         /// <summary>公告（原版 ui.announce）：标题 + 副标题 + 时长 + 是否警示色 + 是否贴底。</summary>
         public string AnnounceTitle { get; private set; }
@@ -136,6 +137,7 @@ namespace AuroraRift
             LowFx = PlayerPrefs.GetInt("aurora.lowfx", 0) == 1;
             HighContrast = PlayerPrefs.GetInt("aurora.contrast", 0) == 1;
             Muted = PlayerPrefs.GetInt("aurora.muted", 0) == 1;
+            HapticsEnabled = PlayerPrefs.GetInt("aurora.haptics", 1) == 1;
             _touchLayout = SystemInfo.deviceType == DeviceType.Handheld || Input.touchSupported;
 
             var args = System.Environment.GetCommandLineArgs();
@@ -368,6 +370,15 @@ namespace AuroraRift
             PlayerPrefs.SetInt("aurora.muted", Muted ? 1 : 0);
             PlayerPrefs.Save();
             AudioDirector.Instance?.SetMuted(Muted);
+        }
+
+        public void ToggleHaptics()
+        {
+            HapticsEnabled = !HapticsEnabled;
+            PlayerPrefs.SetInt("aurora.haptics", HapticsEnabled ? 1 : 0);
+            PlayerPrefs.Save();
+            ShowToast(HapticsEnabled ? "触感震动：开" : "触感震动：关");
+            if (HapticsEnabled) Haptics.Light();
         }
 
         public void TogglePause()

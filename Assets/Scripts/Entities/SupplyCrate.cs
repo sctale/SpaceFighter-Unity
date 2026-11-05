@@ -142,6 +142,7 @@ namespace AuroraRift
                     break;
             }
             AudioDirector.Instance?.PlayPickup();
+            if (Kind != CrateKind.Gem) Haptics.Light();
             Director.Instance?.OnCrateCollected(Kind);
         }
     }
