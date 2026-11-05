@@ -22,7 +22,7 @@ v0.21.3 起改用「3/4 英雄视角」：Polyfork interceptor 抬头 52°、绕
 import math
 import os
 
-from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
+from PIL import Image, ImageChops, ImageDraw, ImageEnhance, ImageFilter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HERO = os.path.join(ROOT, "artgen", "icon_src", "interceptor_hero_3q.png")
@@ -85,11 +85,47 @@ def stars(size, n=70):
     return layer
 
 
+def nebula(size):
+    """低透明度长云带：让图标背景有体积，而不是一块渐变。"""
+    layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    bands = [
+        (0.16, 0.28, 0.62, 0.10, TEAL, 38),
+        (0.48, 0.62, 0.72, 0.12, VIOLET, 34),
+        (0.70, 0.18, 0.52, 0.08, GOLD, 22),
+        (0.30, 0.84, 0.58, 0.09, TEAL, 24),
+    ]
+    for cx, cy, w, h, color, alpha in bands:
+        d.ellipse([size * (cx - w * 0.5), size * (cy - h * 0.5),
+                   size * (cx + w * 0.5), size * (cy + h * 0.5)], fill=color + (alpha,))
+    return layer.filter(ImageFilter.GaussianBlur(size * 0.06))
+
+
+def flares(size, n=5):
+    """少量四芒星：小尺寸下比更大的圆点更像"亮星"。"""
+    layer = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer)
+    rnd = 4242
+    for i in range(n):
+        rnd = (rnd * 1103515245 + 12345) & 0x7FFFFFFF
+        x = (rnd >> 8) % size
+        rnd = (rnd * 1103515245 + 12345) & 0x7FFFFFFF
+        y = (rnd >> 8) % size
+        c = TEAL if i % 2 == 0 else PAPER
+        length = size * (0.020 + 0.012 * (i % 3))
+        w = max(1, SS)
+        d.line([x - length, y, x + length, y], fill=c + (105,), width=w)
+        d.line([x, y - length, x, y + length], fill=c + (105,), width=w)
+    return layer.filter(ImageFilter.GaussianBlur(SS * 1.2))
+
+
 def background():
     bg = radial(S, INK2, INK0).convert("RGBA")
     bg = Image.alpha_composite(bg, glow_layer(S, TEAL, S * 0.18, S * 0.15, S * 0.56, 36))
     bg = Image.alpha_composite(bg, glow_layer(S, VIOLET, S * 0.86, S * 0.88, S * 0.58, 42))
+    bg = Image.alpha_composite(bg, nebula(S))
     bg = Image.alpha_composite(bg, stars(S))
+    bg = Image.alpha_composite(bg, flares(S))
     return bg
 
 
@@ -123,20 +159,70 @@ def content_layer(ship):
     rd.ellipse([cx - rr, cy - rr, cx + rr, cy + rr], outline=TEAL + (225,), width=6 * SS)
     rd.ellipse([cx - rr * 0.80, cy - rr * 0.80, cx + rr * 0.80, cy + rr * 0.80],
                outline=VIOLET + (75,), width=2 * SS)
+    # 24 个刻度（每 90° 加长）+ 四段金色弧：小尺寸下也能读出"瞄准环"
+    for i in range(24):
+        a = i * math.pi / 12
+        inner, outer = rr - 8 * SS, rr + 8 * SS
+        if i % 6 == 0:
+            inner, outer = rr - 16 * SS, rr + 16 * SS
+        rd.line([cx + math.cos(a) * inner, cy + math.sin(a) * inner,
+                 cx + math.cos(a) * outer, cy + math.sin(a) * outer],
+                fill=TEAL + (135 if i % 6 == 0 else 62,), width=2 * SS)
+    for i in range(4):
+        start = 45 + i * 90
+        rd.arc([cx - (rr + 18 * SS), cy - (rr + 18 * SS),
+                cx + (rr + 18 * SS), cy + (rr + 18 * SS)],
+               start, start + 16, fill=GOLD + (210,), width=4 * SS)
+    # 四个方位的菱形标记
+    for a in (0, math.pi * 0.5, math.pi, math.pi * 1.5):
+        mx, my = cx + math.cos(a) * rr, cy + math.sin(a) * rr
+        r = 7 * SS
+        rd.polygon([(mx, my - r), (mx + r * 0.7, my), (mx, my + r), (mx - r * 0.7, my)],
+                   fill=VIOLET + (190,))
     ring = ring.filter(ImageFilter.GaussianBlur(SS * 0.6))
     layer = Image.alpha_composite(layer, ring)
 
-    # 舰船外发光 + 舰船
+    # 舰船背后的中央柔光，把主体从背景里托起来
+    layer = Image.alpha_composite(layer, glow_layer(S, TEAL, cx, cy, S * 0.34, 34, 0.05))
+
+    # 舰船投影 + 外发光 + 边缘光 + 舰船
     hx = int(cx - ship.width / 2)
     hy = int(cy - ship.height / 2)
     a = ship.getchannel("A")
+
+    shadow = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    black = Image.new("L", ship.size, 0)
+    shadow.alpha_composite(Image.merge("RGBA", (
+        black, black, black, a.point(lambda v: int(v * 0.55)))),
+        (hx, hy + int(S * 0.020)))
+    shadow = shadow.filter(ImageFilter.GaussianBlur(S * 0.012))
+    layer = Image.alpha_composite(layer, shadow)
+
     ship_halo = Image.new("RGBA", (S, S), (0, 0, 0, 0))
     ship_halo.alpha_composite(Image.merge("RGBA", (
         Image.new("L", ship.size, TEAL[0]), Image.new("L", ship.size, TEAL[1]),
         Image.new("L", ship.size, TEAL[2]), a.point(lambda v: int(v * 0.48)))), (hx, hy))
     ship_halo = ship_halo.filter(ImageFilter.GaussianBlur(S * 0.014))
     layer = Image.alpha_composite(layer, ship_halo)
+
+    # 边缘光：把 alpha 膨胀后减去原图，得到一圈 6–10px 的青色轮廓
+    dil = a
+    for _ in range(2):
+        dil = dil.filter(ImageFilter.MaxFilter(9))
+    rim = ImageChops.subtract(dil, a).filter(ImageFilter.GaussianBlur(SS * 1.4))
+    rim_layer = Image.new("RGBA", (S, S), (0, 0, 0, 0))
+    rim_layer.alpha_composite(Image.merge("RGBA", (
+        Image.new("L", ship.size, TEAL[0]), Image.new("L", ship.size, TEAL[1]),
+        Image.new("L", ship.size, TEAL[2]), rim.point(lambda v: int(v * 0.9)))), (hx, hy))
+    layer = Image.alpha_composite(layer, rim_layer)
+
     layer.alpha_composite(ship, (hx, hy))
+
+    # 尾喷暖金余晖（压在舰船下缘，小尺寸下提供第二个焦点）
+    for fx in (0.38, 0.62):
+        ex = hx + int(ship.width * fx)
+        ey = hy + int(ship.height * 0.92)
+        layer = Image.alpha_composite(layer, glow_layer(S, GOLD, ex, ey, S * 0.055, 95, 0.012))
     return layer
 
 

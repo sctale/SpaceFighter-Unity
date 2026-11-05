@@ -32,10 +32,10 @@ namespace AuroraRift
 
         // ---------------------------------------------------------------- 设计令牌
         static Color Ink0 => GameConfig.Hex("04060F");
-        static Color Paper => GameConfig.Hex("F3F8FF");
-        static Color InkText => GameConfig.Hex("E8EEFF");
-        static Color Muted => GameConfig.Hex("8D9BBD");
-        static Color Dimc => GameConfig.Hex("5E6B8C");
+        static Color Paper => GameConfig.Hex("F5F9FF");
+        static Color InkText => GameConfig.Hex("E6EEFF");
+        static Color Muted => GameConfig.Hex("97A9CC");
+        static Color Dimc => GameConfig.Hex("6F81A6");
         static Color Teal => GameConfig.Hex("69F5DC");
         static Color TealDim => GameConfig.Hex("36C7B4");
         static Color Violet => GameConfig.Hex("9B8CFF");
@@ -126,14 +126,22 @@ namespace AuroraRift
             {
                 _hitFx = Mathf.Max(0f, _hitFx - Time.unscaledDeltaTime * 5.5f);
                 float k = _hitFx * _hitFx;
-                UiKit.Vignette(new Rect(0, 0, w, RefH), 0.62f * k, _hitTint);
+                // 无法真的做降饱和，用「压暗 + 泛色 + 一条故障扫描线」模拟受创的失真感
+                var wash = GUI.color;
+                GUI.color = new Color(_hitTint.r * 0.35f, _hitTint.g * 0.35f, _hitTint.b * 0.35f, 0.10f * k);
+                GUI.DrawTexture(new Rect(0, 0, w, RefH), UiKit.White);
+                GUI.color = wash;
+                UiKit.Vignette(new Rect(0, 0, w, RefH), 0.68f * k, _hitTint);
+                float gy = RefH * (0.30f + Mathf.Repeat(Time.unscaledTime * 1.9f, 0.42f));
+                UiKit.Line(R(0, gy, w, 2f), new Color(_hitTint.r, _hitTint.g, _hitTint.b, 0.16f * k));
             }
             // 低血量：边缘一圈玫红脉冲
             var p = root.Player;
             if (root.State == GameState.Playing && p != null && p.Hull <= 1)
             {
                 float pulse = 0.5f + 0.5f * Mathf.Sin(Time.unscaledTime * 4.2f);
-                UiKit.Vignette(new Rect(0, 0, w, RefH), 0.18f + pulse * 0.16f);
+                UiKit.Vignette(new Rect(0, 0, w, RefH), 0.18f + pulse * 0.16f,
+                    new Color(Rose.r, Rose.g, Rose.b, 1f));
             }
         }
 
@@ -152,7 +160,7 @@ namespace AuroraRift
 
             _h1 = Label(58, Paper, TextAnchor.MiddleLeft);
             _h1c = Label(58, Paper, TextAnchor.MiddleCenter);
-            _h2 = Label(23, Dimc, TextAnchor.MiddleLeft);
+            _h2 = Label(23, Muted, TextAnchor.MiddleLeft);
             _tag = Label(16, Rose, TextAnchor.MiddleCenter);
             _kbd = Label(14, Dimc, TextAnchor.MiddleCenter);
             _btn = Label(26, InkText, TextAnchor.MiddleCenter);
@@ -242,16 +250,16 @@ namespace AuroraRift
         void DrawMenu(GameRoot root, float w, float top, float bottom)
         {
             float t = Time.unscaledTime - _stateAt;
-            float pad = 36.8f;                       // --pad @540
             float cx = w * 0.5f;
-            float colMax = 680f;                     // 原版正文列宽 340px
 
-            // 背景压暗 + 顶部网格光
+            // 背景：主光 + 对侧冷光 + 底部暖光，给菜单一点纵深
             var scrim = new Rect(0, 0, w, RefH);
             GUI.color = new Color(0.016f, 0.024f, 0.059f, 0.93f);
             GUI.DrawTexture(scrim, UiKit.White);
             GUI.color = Color.white;
-            UiKit.Glow(R(0, -220, w * 1.4f, 900), new Color(0.41f, 0.96f, 0.86f, 0.10f));
+            UiKit.Glow(R(-w * 0.18f, -260f, w * 0.95f, 880f), new Color(0.41f, 0.96f, 0.86f, 0.11f));
+            UiKit.Glow(R(w * 0.55f, 640f, w * 0.8f, 820f), new Color(Violet.r, Violet.g, Violet.b, 0.07f));
+            UiKit.Glow(Center(w, top + 420f, 560f, 560f), new Color(Gold.r, Gold.g, Gold.b, 0.035f));
 
             // 品牌标记从 86.4px 起（原版 .brand margin-top），菱形 46px
             float y = top + 172.8f;
@@ -260,15 +268,21 @@ namespace AuroraRift
             {
                 float mc = cx, my = y + 46f;
                 float pulse = 1f + Mathf.Sin(Time.unscaledTime * 1.7f) * 0.035f;
-                UiKit.Glow(Cx(mc, my, 190f, 190f), new Color(Gold.r, Gold.g, Gold.b, 0.10f));
-                DiamondRing(mc, my, 92f * pulse, Teal);
-                DiamondRing(mc, my, 65f * pulse, Violet);
-                UiKit.Sprite(Cx(mc, my, 26f * pulse, 26f * pulse), UiKit.Diamond, Gold);
-                y += 136f;
+                UiKit.Glow(Cx(mc, my, 220f, 220f), new Color(Gold.r, Gold.g, Gold.b, 0.12f));
+                // 四个方向的准星刻度：让标记更像"瞄准"而不是徽章
+                var tick = new Color(Teal.r, Teal.g, Teal.b, 0.28f);
+                UiKit.Line(R(mc - 1f, my - 78f, 2f, 14f), tick);
+                UiKit.Line(R(mc - 1f, my + 64f, 2f, 14f), tick);
+                UiKit.Line(R(mc - 78f, my - 1f, 14f, 2f), tick);
+                UiKit.Line(R(mc + 64f, my - 1f, 14f, 2f), tick);
+                DiamondRing(mc, my, 96f * pulse, Teal);
+                DiamondRing(mc, my, 68f * pulse, Violet);
+                UiKit.Sprite(Cx(mc, my, 28f * pulse, 28f * pulse), UiKit.Diamond, Gold);
+                y += 140f;
             }
 
             float rise1 = Rise(t, 0.02f);
-            Txt(_eyebrow, Center(w, y + rise1, 700, 24), Sp("DEEP SPACE ARCADE"), TealDim);
+            Txt(_eyebrow, Center(w, y + rise1, 700, 24), Sp("DEEP SPACE ARCADE"), TealDim, TextAnchor.MiddleCenter);
             y += 44f;
 
             float rise2 = Rise(t, 0.06f);
@@ -281,54 +295,68 @@ namespace AuroraRift
 
             TextWithRules(Center(w, y, 620, 26), "AURORA RIFT   //   星穹涅槃", Muted, Line(0.28f));
             y += 46f;
-            Txt(_small, Center(w, y, 700, 30), "穿过裂隙，在弹幕之间起舞。", Muted);
+            Txt(_small, Center(w, y, 700, 30), "穿过裂隙，在弹幕之间起舞。", Muted, TextAnchor.MiddleCenter);
             y += 62f;
 
             // --- 特性胶囊（两列）---
             string[] chips = { "12 种敌机 · 3 词缀", "22 种 Boss 招式 · 破防", "相位冲刺", "3 条武器线 ×5 级", "4 类僚机 · 3 层护盾", "10 个星区" };
-            float chipW = 300f;
+            float chipW = 300f, chipH = 38f;
             for (int i = 0; i < chips.Length; i++)
             {
                 int col = i % 2, row = i / 2;
-                var r = R(cx - chipW - 6f + col * (chipW + 12f), y + row * 40f, chipW, 34f);
-                UiKit.Pill(r, new Color(0.027f, 0.043f, 0.10f, 0.55f), Line(0.16f));
-                Txt(_tiny, r, chips[i], new Color(Muted.r, Muted.g, Muted.b, 1f));
+                var r = R(cx - chipW - 6f + col * (chipW + 12f), y + row * 44f, chipW, chipH);
+                UiKit.Slab(r, new Color(0.035f, 0.055f, 0.12f, 0.72f), Line(0.18f), 9f);
+                UiKit.Line(R(r.x + 12f, r.y + 11f, 3f, r.height - 22f), new Color(Teal.r, Teal.g, Teal.b, 0.55f));
+                Txt(_tiny, R(r.x + 24f, r.y, r.width - 34f, r.height), chips[i],
+                    new Color(InkText.r, InkText.g, InkText.b, 0.86f), TextAnchor.MiddleLeft);
             }
-            y += 3 * 40f + 18f;
+            y += 3 * 44f + 14f;
 
             // --- 战绩卡 ---
             {
                 var card = Center(w, y, 640f, 132f);
-                UiKit.Panel(card, new Color(0.027f, 0.043f, 0.10f, 0.52f), Line(0.13f), 16f);
-                Txt(_tiny, R(card.x + 40f, card.y + 26f, 260f, 24f), Sp("BEST SCORE"), Dimc);
-                Bold(_num, R(card.x + 40f, card.y + 54f, 300f, 56f), root.Best.ToString(), Paper, 2f);
-                UiKit.Line(R(card.center.x, card.y + 30f, 2f, 72f), Line(0.16f));
-                Txt(_tiny, R(card.center.x + 40f, card.y + 26f, 260f, 24f), "最远星区", Dimc);
-                Bold(_num, R(card.center.x + 40f, card.y + 54f, 300f, 56f),
+                UiKit.SlabGrad(card, new Color(0.075f, 0.122f, 0.216f, 0.90f),
+                    new Color(0.020f, 0.036f, 0.082f, 0.90f), Line(0.22f), 18f);
+                UiKit.Line(R(card.x + 18f, card.y + 1f, card.width - 36f, 2f),
+                    new Color(Teal.r, Teal.g, Teal.b, 0.45f));
+                Txt(_tiny, R(card.x + 40f, card.y + 26f, 260f, 22f), Sp("BEST SCORE"), TealDim);
+                Bold(Label(44, Paper, TextAnchor.UpperLeft), R(card.x + 40f, card.y + 54f, 300f, 56f),
+                    root.Best.ToString("N0"), Paper, 2f);
+                UiKit.Line(R(card.center.x, card.y + 28f, 1f, 76f), Line(0.20f));
+                Txt(_tiny, R(card.center.x + 40f, card.y + 26f, 260f, 22f), "最远星区", Gold);
+                Bold(Label(44, Paper, TextAnchor.UpperLeft), R(card.center.x + 40f, card.y + 54f, 300f, 56f),
                     root.BestZone.ToString("00"), Paper, 2f);
-                y += 168f;
+                y += 170f;
             }
 
             // --- 难度三选 ---
             var diffs = Difficulties.All;
             float pickW = 640f, segW = (pickW - 12f) / 3f;
-            var picker = Center(w, y, pickW, 88f);
-            UiKit.Pill(picker, new Color(0.027f, 0.043f, 0.10f, 0.55f), Line(0.13f));
+            var picker = Center(w, y, pickW, 92f);
+            UiKit.SlabGrad(picker, new Color(0.055f, 0.085f, 0.165f, 0.86f),
+                new Color(0.016f, 0.030f, 0.070f, 0.86f), Line(0.18f), 18f);
             for (int i = 0; i < diffs.Length; i++)
             {
-                var r = R(picker.x + 6f + i * segW, picker.y + 6f, segW - 4f, 76f);
+                var r = R(picker.x + 6f + i * segW, picker.y + 6f, segW - 4f, 80f);
                 bool on = root.Difficulty.Id == diffs[i].Id;
                 var accent = diffs[i].Id == "abyss" ? Rose : Teal;
                 if (on)
-                    UiKit.Pill(r, new Color(accent.r, accent.g, accent.b, 0.14f), new Color(accent.r, accent.g, accent.b, 0.5f));
-                // 只留中文名并垂直居中：原来在 42px 高的格子里塞两行，EN 副标必然压在框沿上
-                Txt(Label(22, on ? accent : Muted, TextAnchor.MiddleCenter), r, diffs[i].Name,
-                    new Color(on ? accent.r : Muted.r, on ? accent.g : Muted.g, on ? accent.b : Muted.b,
-                              on ? 1f : 0.9f));
+                {
+                    UiKit.SlabGrad(r, new Color(accent.r, accent.g, accent.b, 0.30f),
+                        new Color(accent.r, accent.g, accent.b, 0.08f),
+                        new Color(accent.r, accent.g, accent.b, 0.65f), 12f);
+                    UiKit.Line(R(r.x + 22f, r.y + 1f, r.width - 44f, 2f),
+                        new Color(accent.r, accent.g, accent.b, 0.9f));
+                }
+                string en = diffs[i].Id == "cruise" ? "CRUISE" : diffs[i].Id == "abyss" ? "ABYSS" : "STANDARD";
+                Txt(Label(21, on ? accent : InkText, TextAnchor.MiddleCenter), R(r.x, r.y + 12f, r.width, 28f),
+                    diffs[i].Name, on ? accent : new Color(InkText.r, InkText.g, InkText.b, 0.82f));
+                Txt(Label(11, on ? new Color(accent.r, accent.g, accent.b, 0.75f) : Dimc, TextAnchor.MiddleCenter),
+                    R(r.x, r.y + 44f, r.width, 18f), Sp(en), on ? new Color(accent.r, accent.g, accent.b, 0.75f) : Dimc);
                 if (GUI.Button(r, GUIContent.none, _invisible)) root.SetDifficulty(diffs[i]);
             }
-            y += 104f;
-            Txt(_tiny, Center(w, y, 700, 26), root.Difficulty.Note, new Color(Muted.r, Muted.g, Muted.b, 0.85f));
+            y += 108f;
+            Txt(_tiny, Center(w, y, 700, 26), root.Difficulty.Note, new Color(Muted.r, Muted.g, Muted.b, 0.95f), TextAnchor.MiddleCenter);
             // 20:9 的大屏上「难度 → 开始键」之间会空出一大截（1080×1920 实测）：
             // 把这段余量分给标题下方与开始键上方，让整屏呼吸均匀，而不是全部堆在底部。
             float hintsTopEarly = RefH - bottom - 232.8f;
@@ -336,13 +364,16 @@ namespace AuroraRift
             y += Mathf.Min(spare * 0.55f, 230f);
             y += 54f;
 
+            Txt(_eyebrow, Center(w, y - 32f, 700, 22f), Sp("READY FOR LAUNCH"), TealDim, TextAnchor.MiddleCenter);
+
             // --- 开始按钮 ---
             {
-                var btn = Center(w, y, 560f, 108f);
+                var btn = Center(w, y, 560f, 110f);
                 var prev = GUI.color;
                 UIButtonFrame(btn, true);
+                UiKit.Line(R(btn.x + 18f, btn.y + 1f, btn.width - 36f, 2f), new Color(1f, 1f, 1f, 0.35f));
                 Txt(_btnBig, btn, "开始巡航", new Color(0.02f, 0.06f, 0.11f, 1f));
-                Txt(_kbd, R(btn.xMax - 56f, btn.y + 44f, 44f, 20f), "ENTER", new Color(0.02f, 0.06f, 0.11f, 0.45f));
+                Txt(_kbd, R(btn.xMax - 64f, btn.y + 45f, 52f, 20f), "ENTER", new Color(0.02f, 0.06f, 0.11f, 0.5f));
                 // 播放三角
                 UiKit.Sprite(Cx(btn.x + 58f, btn.center.y, 22f, 26f), UiKit.TriRight, new Color(0.02f, 0.06f, 0.11f, 0.9f));
                 if (GUI.Button(btn, GUIContent.none, _invisible)) root.StartRun();
@@ -360,21 +391,21 @@ namespace AuroraRift
                 new[] { "星爆", "擦弹充能后释放" },
                 new[] { "暂停", "右上角 II 或 P" },
             };
-            float colW = 330f, rowH = 64f;
+            float colW = 330f, rowH = 62f;
             for (int i = 0; i < hints.Length; i++)
             {
                 int col = i % 2, row = i / 2;
                 var r = R(cx - colW - 6f + col * (colW + 12f), hintsTop + row * rowH, colW, rowH - 10f);
-                UiKit.Panel(r, new Color(0.027f, 0.043f, 0.10f, 0.34f), Line(0.09f), 8f);
+                UiKit.Slab(r, new Color(0.035f, 0.055f, 0.12f, 0.52f), Line(0.14f), 10f);
                 var key = R(r.x + 10f, r.y + (r.height - 32f) * 0.5f, 68f, 32f);
-                UiKit.Panel(key, new Color(0.04f, 0.067f, 0.14f, 0.6f), Line(0.16f), 4f);
-                Txt(_kbd, key, hints[i][0], Teal);
+                UiKit.Slab(key, new Color(0.04f, 0.067f, 0.14f, 0.78f), new Color(Teal.r, Teal.g, Teal.b, 0.30f), 5f);
+                Txt(_kbd, key, hints[i][0], new Color(Teal.r, Teal.g, Teal.b, 0.95f));
                 Txt(_small, R(key.xMax + 12f, r.y, r.width - key.width - 22f, r.height), hints[i][1],
-                    new Color(Muted.r, Muted.g, Muted.b, 0.95f), TextAnchor.MiddleLeft);
+                    new Color(InkText.r, InkText.g, InkText.b, 0.78f), TextAnchor.MiddleLeft);
             }
 
-            Txt(_tiny, Center(w, RefH - bottom - 24f, 900f, 24f),
-                Sp("v0.21.8") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
+            Txt(_tiny, Center(w, RefH - bottom - 34f, 900f, 24f),
+                Sp("v0.21.9") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc, TextAnchor.MiddleCenter);
         }
 
         /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
@@ -446,10 +477,12 @@ namespace AuroraRift
             // 50 号数字的墨迹底落在 ScoreTop+55.2，BEST 行墨迹顶在 BestTop+7.6，
             // 两者之间要留出 CSS(line-height:1 的 24.8 + gap 2) 折出来的 10.4。
             // 底板包住四行到 172，Boss 卡从 180.8 起，中间留 8.8 的缝。
-            UiKit.Slab(R(pad - 10f, topPad + 24f, 306f, 148f),
-                new Color(0.008f, 0.012f, 0.032f, 0.34f), Line(0.12f), 18f);
-            UiKit.Line(R(pad - 10f, topPad + 42f, 3f, 100f), new Color(Teal.r, Teal.g, Teal.b, 0.5f));
-            Txt(Label(18, Muted, TextAnchor.UpperLeft), R(pad, topPad + 36.8f, 420f, 22f), Sp("SCORE"), Muted);
+            UiKit.SlabGrad(R(pad - 10f, topPad + 24f, 306f, 148f),
+                new Color(0.065f, 0.105f, 0.185f, 0.72f), new Color(0.006f, 0.010f, 0.028f, 0.72f),
+                Line(0.18f), 18f);
+            UiKit.Line(R(pad - 10f, topPad + 24f, 306f, 1f), new Color(Teal.r, Teal.g, Teal.b, 0.35f));
+            UiKit.Line(R(pad - 10f, topPad + 42f, 2f, 100f), new Color(Teal.r, Teal.g, Teal.b, 0.65f));
+            Txt(Label(17, TealDim, TextAnchor.UpperLeft), R(pad, topPad + 36.8f, 420f, 22f), Sp("SCORE"), TealDim);
             Bold(_numBig, R(pad, topPad + ScoreTop, 460f, ScoreBoxH),
                 Mathf.RoundToInt(root.Score).ToString("N0"), Paper, 2f);
             float bestY = topPad + BestTop;
@@ -462,15 +495,18 @@ namespace AuroraRift
             // ---- 中上：星区（eyebrow 19.4 / 数字 31.4 / 区名 50.4）----
             if (dir != null)
             {
-                Txt(Label(18, TealDim, TextAnchor.MiddleCenter), R(w * 0.5f - 220f, topPad + 38.8f, 440f, 22f), Sp("SECTOR"), TealDim);
-                Bold(_num, R(w * 0.5f - 220f, topPad + 62.8f, 440f, 40f), dir.Zone.ToString("00"), Teal, 1.6f);
-                Txt(Label(19, Dimc, TextAnchor.MiddleCenter), R(w * 0.5f - 220f, topPad + 100.8f, 440f, 24f),
-                    dir.ZoneName, Muted);
+                var center = w * 0.5f;
+                Txt(Label(18, TealDim, TextAnchor.MiddleCenter), R(center - 220f, topPad + 38.8f, 440f, 22f), Sp("SECTOR"), TealDim);
+                UiKit.Sprite(Cx(center - 118f, topPad + 82f, 8f, 8f), UiKit.Diamond, new Color(Teal.r, Teal.g, Teal.b, 0.35f));
+                UiKit.Sprite(Cx(center + 118f, topPad + 82f, 8f, 8f), UiKit.Diamond, new Color(Teal.r, Teal.g, Teal.b, 0.35f));
+                Bold(_num, R(center - 220f, topPad + 62.8f, 440f, 40f), dir.Zone.ToString("00"), Teal, 1.6f);
+                Txt(Label(18, Muted, TextAnchor.MiddleCenter), R(center - 220f, topPad + 100.8f, 440f, 24f),
+                    dir.ZoneName, new Color(InkText.r, InkText.g, InkText.b, 0.62f));
             }
 
             // ---- 右上：暂停（.hud-top 第三列，顶到 18.4）----
             var pause = Controls.PauseRect;
-            UiKit.Pill(pause, new Color(0.039f, 0.067f, 0.14f, 0.55f), Line(0.16f));
+            UiKit.Slab(pause, new Color(0.039f, 0.067f, 0.14f, 0.72f), Line(0.22f), 14f);
             UiKit.Line(R(pause.center.x - 7f, pause.center.y - 14f, 5f, 28f), new Color(Muted.r, Muted.g, Muted.b, 0.9f));
             UiKit.Line(R(pause.center.x + 2f, pause.center.y - 14f, 5f, 28f), new Color(Muted.r, Muted.g, Muted.b, 0.9f));
 
@@ -502,7 +538,10 @@ namespace AuroraRift
             // .boss-panel：top = pad+66，左右 = pad，padding 9/11/8，行间 gap 6（CSS px ×2 进 GUI）
             float pad = 36.8f;
             var card = R(pad, top + 180.8f, w - pad * 2f, 136f);
-            UiKit.Panel(card, new Color(0.047f, 0.031f, 0.086f, 0.72f), new Color(Rose.r, Rose.g, Rose.b, 0.18f), 16f);
+            UiKit.SlabGrad(card, new Color(0.105f, 0.060f, 0.145f, 0.82f),
+                new Color(0.016f, 0.014f, 0.045f, 0.82f), new Color(Rose.r, Rose.g, Rose.b, 0.30f), 16f);
+            UiKit.Line(R(card.x + 20f, card.y + 1f, card.width - 40f, 2f),
+                new Color(Rose.r, Rose.g, Rose.b, 0.55f));
             float inner = 26f;                       // 1px 边框 + 11px 内缩
             float ix = card.x + inner, iw = card.width - inner * 2f;
 
@@ -510,7 +549,7 @@ namespace AuroraRift
             var tagStyle = Label(16, Rose, TextAnchor.MiddleCenter);
             float tagW = tagStyle.CalcSize(new GUIContent(Sp("THREAT"))).x + 20f;
             var tag = R(ix, card.y + 20f, tagW, 27f);
-            UiKit.Panel(tag, new Color(Rose.r, Rose.g, Rose.b, 0.08f), new Color(Rose.r, Rose.g, Rose.b, 0.4f), 4f);
+            UiKit.Slab(tag, new Color(Rose.r, Rose.g, Rose.b, 0.12f), new Color(Rose.r, Rose.g, Rose.b, 0.55f), 5f);
             Txt(tagStyle, tag, Sp("THREAT"), Rose);
 
             // 机名 + 副标题：原版是 flex + 6px gap，副标题紧跟实测宽度，不是硬写 x
@@ -525,14 +564,14 @@ namespace AuroraRift
                 R(tag.xMax + 12f, card.y + 20f, Mathf.Max(60f, phase.x - tag.xMax - 32f), 28f),
                 b.BossTitle, new Color(Dimc.r, Dimc.g, Dimc.b, 0.95f));
             var phaseCol = b.Critical ? Gold : Rose;
-            UiKit.Pill(phase, new Color(phaseCol.r, phaseCol.g, phaseCol.b, b.Critical ? 0.14f : 0.02f),
-                new Color(phaseCol.r, phaseCol.g, phaseCol.b, b.Critical ? 0.5f : 0f));
+            UiKit.Slab(phase, new Color(phaseCol.r, phaseCol.g, phaseCol.b, b.Critical ? 0.18f : 0.05f),
+                new Color(phaseCol.r, phaseCol.g, phaseCol.b, b.Critical ? 0.65f : 0.18f), 6f);
             Txt(Label(16, phaseCol, TextAnchor.MiddleCenter), phase,
                 b.Critical ? Sp("CRIT") : "P" + (b.Phase + 1), phaseCol);
 
             // 血条（6px 内高 + 1px 边框 = 8px）+ 25% 分段刻线
             var track = R(ix, card.y + 58f, iw, 16f);
-            UiKit.Pill(track, new Color(1f, 1f, 1f, 0.07f), new Color(Rose.r, Rose.g, Rose.b, 0.14f));
+            UiKit.Slab(track, new Color(1f, 1f, 1f, 0.07f), new Color(Rose.r, Rose.g, Rose.b, 0.22f), 6f);
             float frac = Mathf.Clamp01(b.Hp / Mathf.Max(1f, b.MaxHp));
             if (frac > 0.001f)
                 UiKit.Gradient(R(track.x + 2f, track.y + 2f, (track.width - 4f) * frac, track.height - 4f), UiKit.GradRose, Color.white);
@@ -541,7 +580,7 @@ namespace AuroraRift
 
             // 破防槽（3px，紧贴血条下方）
             var brk = R(ix, card.y + 80f, iw, 6f);
-            UiKit.Pill(brk, new Color(Gold.r, Gold.g, Gold.b, 0.10f), Color.clear);
+            UiKit.Slab(brk, new Color(Gold.r, Gold.g, Gold.b, 0.12f), new Color(Gold.r, Gold.g, Gold.b, 0.20f), 3f);
             float bf = Mathf.Clamp01(b.BreakGauge / Mathf.Max(1f, b.BreakMax));
             if (bf > 0.001f)
                 UiKit.Line(R(brk.x, brk.y, brk.width * bf, brk.height), new Color(Gold.r, Gold.g, Gold.b, 0.75f));
@@ -553,7 +592,8 @@ namespace AuroraRift
             {
                 bool telling = b.TelegraphLeft > 0f;
                 float pulse = telling ? 0.55f + 0.45f * Mathf.Sin(Time.unscaledTime * 14f) : 0.9f;
-                Txt(Label(16, Gold, TextAnchor.MiddleLeft), R(ix, card.y + 98f, iw, 20f),
+                UiKit.Line(R(ix, card.y + 98f, 2f, 20f), new Color(Gold.r, Gold.g, Gold.b, 0.55f));
+                Txt(Label(15, Gold, TextAnchor.MiddleLeft), R(ix + 10f, card.y + 98f, iw - 10f, 20f),
                     Sp(telling ? "CAST" : "MOVE") + "   " + cast, new Color(Gold.r, Gold.g, Gold.b, pulse));
             }
         }
@@ -566,24 +606,31 @@ namespace AuroraRift
             var line = GameConfig.Line(p.Weapons.ActiveId);
             bool detuned = p.Weapons.Active.Detuned;
 
-            // ---- 左：生存状态（.dash-status 62×32，上排舰体 y=915、下排护盾 y=930）----
+            // 整条仪表带的底板：给五个元件一个共同重心，而不是散在渐变上
+            var band = R(pad - 12f, bandTop + 12f, w - (pad - 12f) * 2f, 96f);
+            UiKit.SlabGrad(band, new Color(0.045f, 0.075f, 0.145f, 0.55f),
+                new Color(0.008f, 0.014f, 0.035f, 0.55f), Line(0.14f), 16f);
+            UiKit.Line(R(band.x + 16f, band.y + 1f, band.width - 32f, 1f),
+                new Color(Teal.r, Teal.g, Teal.b, 0.22f));
+
+            // ---- 左：生存状态（上排舰体 / 下排护盾，两排以 58 为共同中心）----
             float x = pad;
             for (int i = 0; i < 5; i++)
             {
-                var r = R(x + i * 26f, bandTop + 34f, 20f, 16f);
+                var r = R(x + i * 26f, bandTop + 32f, 20f, 16f);
                 bool on = i < p.Hull;
                 UiKit.Sprite(r, UiKit.TriDown, on ? Teal : new Color(Muted.r, Muted.g, Muted.b, 0.16f));
             }
             for (int i = 0; i < GameConfig.MaxShields; i++)
             {
-                var r = R(x + i * 20f, bandTop + 64f, 14f, 14f);
+                var r = R(x + i * 20f, bandTop + 60f, 14f, 14f);
                 bool on = i < p.Shields;
                 UiKit.Sprite(r, UiKit.Hex, on ? Violet : new Color(Violet.r, Violet.g, Violet.b, 0.26f));
             }
 
-            // ---- 左中：武器胶囊（chip 从 89.4px 起；26px 充能环 + 42px 名 + 5 格等级）----
+            // ---- 左中：武器胶囊（26px 充能环 + 名字 + 5 格等级）----
             float chipX = x + 124f + 18f;            // dash-status 宽 62 + gap 9（×2）
-            float ringCY = bandTop + 56f;            // 带内垂直居中（926 - 898 = 28 CSS）
+            float ringCY = bandTop + 58f;            // 与动作环同一水平中心线
             var ring = Cx(chipX + 6f + 26f, ringCY, 52f, 52f);
             UiKit.Arc(ring, Mathf.Clamp01(p.Weapons.Active.Charge / 100f),
                 detuned ? Rose : line.Tint, 5f);
@@ -595,11 +642,11 @@ namespace AuroraRift
             string wname = detuned ? "失谐排气" : GameConfig.WeaponName(p.Weapons.ActiveId, p.Weapons.Level);
             var nameCol = detuned ? Rose : InkText;
             float copyX = ring.xMax + 14f;
-            Txt(Label(18, nameCol, TextAnchor.UpperLeft), R(copyX, bandTop + 26f, 84f, 22f), wname, nameCol);
+            Txt(Label(17, nameCol, TextAnchor.UpperLeft), R(copyX, bandTop + 24f, 84f, 22f), wname, nameCol);
             for (int i = 0; i < 5; i++)
             {
-                // 名字与等级条之间留足字高：以前 19 号字挤在 20 高的框里，笔画直接压到格子上
-                var pip = R(copyX + i * 17.5f, bandTop + 58f, 14f, 6f);
+                // 名字与等级条之间留足字高，避免笔画压到格子上
+                var pip = R(copyX + i * 17.5f, bandTop + 52f, 14f, 6f);
                 bool on = i < p.Weapons.Level;
                 UiKit.Line(pip, on ? line.Tint : new Color(0.63f, 0.71f, 1f, 0.18f));
             }
@@ -611,7 +658,7 @@ namespace AuroraRift
                 float railW = Mathf.Min(264f, w - railX - 380f);
                 if (railW > 60f)
                 {
-                    var rail = R(railX, bandTop + 52f, railW, 6f);
+                    var rail = R(railX, bandTop + 55f, railW, 6f);
                     UiKit.Pill(rail, new Color(0.63f, 0.71f, 1f, 0.12f), Color.clear);
                     float prog = dir != null ? dir.RailProgress : 0f;
                     var col = dir != null && dir.State == Director.RunState.Boss ? Rose
@@ -646,10 +693,10 @@ namespace AuroraRift
             if (hot) UiKit.Glow(Cx(r.center.x, r.center.y, r.width * 1.9f, r.height * 1.9f),
                 new Color(color.r, color.g, color.b, 0.16f));
 
-            Txt(Label(21, lit ? color : InkText, TextAnchor.MiddleCenter), R(r.x, r.y + 10f, r.width, 28f), label,
+            Txt(Label(18, lit ? color : InkText, TextAnchor.MiddleCenter), R(r.x, r.y + 12f, r.width, 24f), label,
                 lit ? color : InkText);
-            Txt(Label(14, lit ? new Color(color.r, color.g, color.b, 0.9f) : Dimc, TextAnchor.MiddleCenter),
-                R(r.x, r.y + 40f, r.width, 20f), sub, lit ? new Color(color.r, color.g, color.b, 0.9f) : Dimc);
+            Txt(Label(11, lit ? new Color(color.r, color.g, color.b, 0.9f) : Dimc, TextAnchor.MiddleCenter),
+                R(r.x, r.y + 39f, r.width, 16f), sub, lit ? new Color(color.r, color.g, color.b, 0.9f) : Dimc);
         }
 
         static Rect Ring(Rect r, float d) => new Rect(r.x + d, r.y + d, r.width - d * 2f, r.height - d * 2f);
@@ -663,32 +710,41 @@ namespace AuroraRift
             float dur = Mathf.Max(0.2f, root.AnnounceDur);
             if (age > dur) return;
 
-            float fadeIn = Mathf.Clamp01(age / 0.22f);
+            float fadeIn = Mathf.Clamp01(age / 0.18f);
             float fadeOut = Mathf.Clamp01((dur - age) / 0.3f);
             float k = Mathf.Min(fadeIn, fadeOut);
-            float slide = (1f - fadeIn) * 14f;
+            float slide = (1f - fadeIn) * 16f;
+            float pop = 1f + (1f - fadeIn) * 0.10f;      // 入场 0.94→1 的轻微弹入
 
             var col = root.AnnounceAlert ? Rose : Paper;
             var subCol = root.AnnounceAlert ? Gold : Teal;
+            var accent = root.AnnounceAlert ? Rose : Teal;
 
-            var tmp = Label(46, col, TextAnchor.MiddleCenter);
+            int fs = Mathf.RoundToInt(46f * pop);
+            var tmp = Label(fs, col, TextAnchor.MiddleCenter);
             float tw = Mathf.Min(tmp.CalcSize(new GUIContent(root.AnnounceTitle)).x + 90f, w - 120f);
             // 原版公告中心在 38% 高度（364.8px / 960），底部变体在 837.6px
             float y = root.AnnounceBottom ? 1675.2f : 729.6f;
-            var box = Cx(w * 0.5f, y + slide, tw, string.IsNullOrEmpty(root.AnnounceSub) ? 74f : 112f);
+            var box = Cx(w * 0.5f, y + slide, tw, (string.IsNullOrEmpty(root.AnnounceSub) ? 74f : 112f) * pop);
 
-            UiKit.Pill(box, new Color(0.016f, 0.024f, 0.059f, 0.55f * k), new Color(0.63f, 0.71f, 1f, 0.12f * k));
-            Bold(tmp, R(box.x, box.y + 8f, box.width, 56f), root.AnnounceTitle, new Color(col.r, col.g, col.b, k), 2.2f);
+            UiKit.Glow(Cx(box.center.x, box.center.y, box.width * 1.35f, box.height * 1.7f),
+                new Color(accent.r, accent.g, accent.b, 0.12f * k));
+            UiKit.Slab(box, new Color(0.016f, 0.024f, 0.059f, 0.62f * k),
+                new Color(accent.r, accent.g, accent.b, 0.30f * k), 14f);
+            UiKit.Line(R(box.x + 22f, box.y + 1f, box.width - 44f, 2f),
+                new Color(accent.r, accent.g, accent.b, 0.55f * k));
+            Bold(tmp, R(box.x, box.y + 8f * pop, box.width, 56f * pop), root.AnnounceTitle,
+                new Color(col.r, col.g, col.b, k), 2.2f);
             if (!string.IsNullOrEmpty(root.AnnounceSub))
-                Txt(Label(17, subCol, TextAnchor.MiddleCenter), R(box.x, box.y + 64f, box.width, 26f),
+                Txt(Label(16, subCol, TextAnchor.MiddleCenter), R(box.x, box.y + 64f * pop, box.width, 26f * pop),
                     Sp(root.AnnounceSub), new Color(subCol.r, subCol.g, subCol.b, k * 0.95f));
 
             // 两侧细线：原版每条 54px 长、离胶囊 12px
             float lx = box.x - 24f;
             if (lx > 20f)
             {
-                UiKit.Line(R(lx - 108f, box.center.y - 1f, 108f, 2f), new Color(Violet.r, Violet.g, Violet.b, 0.28f * k));
-                UiKit.Line(R(box.xMax + 24f, box.center.y - 1f, 108f, 2f), new Color(Violet.r, Violet.g, Violet.b, 0.28f * k));
+                UiKit.Line(R(lx - 120f, box.center.y - 1f, 120f, 2f), new Color(accent.r, accent.g, accent.b, 0.30f * k));
+                UiKit.Line(R(box.xMax + 24f, box.center.y - 1f, 120f, 2f), new Color(accent.r, accent.g, accent.b, 0.30f * k));
             }
         }
 
@@ -703,8 +759,9 @@ namespace AuroraRift
                 float tw = Mathf.Min(st.CalcSize(new GUIContent(root.Hint)).x + 60f, w - 100f);
                 // 教学胶囊贴在仪表带上方 155px（原版 742.6 vs 带顶 898）
                 var r = Cx(w * 0.5f, bandTop - 310.8f, tw, 56f);
-                UiKit.Pill(r, new Color(0.027f, 0.043f, 0.10f, 0.6f * k), new Color(0.63f, 0.71f, 1f, 0.13f * k));
-                Txt(st, r, root.Hint, new Color(Muted.r, Muted.g, Muted.b, k));
+                UiKit.Slab(r, new Color(0.027f, 0.043f, 0.10f, 0.72f * k),
+                    new Color(Teal.r, Teal.g, Teal.b, 0.18f * k), 12f);
+                Txt(st, r, root.Hint, new Color(InkText.r, InkText.g, InkText.b, 0.82f * k));
             }
 
             float ageT = Time.unscaledTime - root.ToastAt;
@@ -715,8 +772,9 @@ namespace AuroraRift
                 float tw = Mathf.Min(st.CalcSize(new GUIContent(root.Toast)).x + 60f, w - 100f);
                 // 飘字再高一档，贴在 695px（原版）
                 var r = Cx(w * 0.5f, bandTop - 406f, tw, 58f);
-                UiKit.Pill(r, new Color(0.027f, 0.043f, 0.10f, 0.88f * k), new Color(0.63f, 0.71f, 1f, 0.14f * k));
-                Txt(st, r, root.Toast, new Color(InkText.r, InkText.g, InkText.b, k));
+                UiKit.Slab(r, new Color(0.027f, 0.043f, 0.10f, 0.92f * k),
+                    new Color(Gold.r, Gold.g, Gold.b, 0.22f * k), 12f);
+                Txt(st, r, root.Toast, new Color(Paper.r, Paper.g, Paper.b, k));
             }
         }
 
@@ -728,11 +786,15 @@ namespace AuroraRift
             float cardW = Mathf.Min(680f, w - 80f);
             float cardH = 1000f;
             var card = Cx(w * 0.5f, RefH * 0.5f, cardW, cardH);
-            UiKit.Panel(card, new Color(0.063f, 0.094f, 0.188f, 0.94f), Line(0.14f), 16f);
-            UiKit.Line(R(card.x + 28f, card.y + 1f, card.width - 56f, 2f), new Color(1f, 1f, 1f, 0.05f));
+            UiKit.Glow(Cx(card.center.x, card.center.y, cardW * 1.25f, cardH * 1.12f),
+                new Color(Teal.r, Teal.g, Teal.b, 0.06f));
+            UiKit.SlabGrad(card, new Color(0.075f, 0.115f, 0.20f, 0.96f),
+                new Color(0.014f, 0.026f, 0.060f, 0.96f), Line(0.24f), 20f);
+            UiKit.Line(R(card.x + 30f, card.y + 1f, card.width - 60f, 2f),
+                new Color(Teal.r, Teal.g, Teal.b, 0.55f));
 
             float x = card.x + 44f, y = card.y + 40f;
-            Txt(_eyebrow, R(x, y, 400f, 24f), Sp("SYSTEM HOLD"), Muted);
+            Txt(_eyebrow, R(x, y, 400f, 24f), Sp("SYSTEM HOLD"), TealDim);
             y += 34f;
             Bold(_h1c, R(x, y, card.width - 88f, 70f), "已暂停", Paper, 2f);
             y += 74f;
@@ -771,19 +833,20 @@ namespace AuroraRift
             y += 118f;
 
             var again = R(x, y, card.width - 88f, 92f);
-            UiKit.Panel(again, new Color(0.047f, 0.075f, 0.149f, 0.65f), Line(0.26f), 6f);
+            UIButtonFrame(again, false);
             Txt(_btn, again, "重新开始", InkText);
             if (GUI.Button(again, GUIContent.none, _invisible)) root.Restart();
             y += 110f;
 
-            var quit = R(x, y, card.width - 88f, 96f);
-            UiKit.Panel(quit, new Color(0.047f, 0.075f, 0.149f, 0.45f), Line(0.2f), 6f);
-            Txt(Label(19, Muted, TextAnchor.MiddleCenter), quit, "返回基地", Muted);
+            var quit = R(x, y, card.width - 88f, 88f);
+            UIButtonFrame(quit, false);
+            Txt(Label(20, Muted, TextAnchor.MiddleCenter), quit, "返回基地", Muted);
             if (GUI.Button(quit, GUIContent.none, _invisible)) root.BackToMenu();
-            y += 112f;
+            y += 106f;
 
-            Txt(Label(14, Dimc, TextAnchor.MiddleCenter), R(x, y, card.width - 88f, 22f),
-                Sp("SPACE 冲刺   ·   SHIFT 精准   ·   X 星爆   ·   M 静音"), new Color(Dimc.r, Dimc.g, Dimc.b, 0.9f));
+            Txt(Label(15, Dimc, TextAnchor.MiddleCenter), R(x, y, card.width - 88f, 22f),
+                Sp("SPACE 冲刺   ·   SHIFT 精准   ·   X 星爆   ·   M 静音"),
+                new Color(InkText.r, InkText.g, InkText.b, 0.55f));
         }
 
         float Chips(Rect area, string[] texts, float y)
@@ -796,8 +859,9 @@ namespace AuroraRift
                 float tw = st.CalcSize(new GUIContent(texts[i])).x + 28f;
                 if (x + tw > area.xMax) { x = area.x; y += h + 8f; }
                 var r = R(x, y, tw, h);
-                UiKit.Pill(r, new Color(0.41f, 0.96f, 0.86f, 0.05f), Line(0.12f));
-                Txt(st, r, texts[i], Muted);
+                UiKit.Slab(r, new Color(0.41f, 0.96f, 0.86f, 0.07f), Line(0.18f), 8f);
+                UiKit.Line(R(r.x + 9f, r.y + 9f, 2f, r.height - 18f), new Color(Teal.r, Teal.g, Teal.b, 0.45f));
+                Txt(st, r, texts[i], new Color(InkText.r, InkText.g, InkText.b, 0.82f));
                 x += tw + 8f;
             }
             return y + h + 8f;
@@ -806,17 +870,20 @@ namespace AuroraRift
         float SettingRow(GameRoot root, float x, float y, float width, string title, string sub, bool on, System.Action toggle)
         {
             var row = R(x, y, width, 92f);
-            Txt(Label(25, InkText, TextAnchor.MiddleLeft), R(row.x, row.y + 12f, row.width - 140f, 30f), title, InkText);
-            Txt(Label(18, Muted, TextAnchor.MiddleLeft), R(row.x, row.y + 44f, row.width - 140f, 24f), sub, new Color(Muted.r, Muted.g, Muted.b, 0.9f));
+            Txt(Label(24, Paper, TextAnchor.MiddleLeft), R(row.x, row.y + 12f, row.width - 160f, 30f), title, Paper);
+            Txt(Label(17, Muted, TextAnchor.MiddleLeft), R(row.x, row.y + 44f, row.width - 160f, 24f), sub,
+                new Color(Muted.r, Muted.g, Muted.b, 0.95f));
 
+            Txt(Label(13, on ? Teal : Dimc, TextAnchor.MiddleRight), R(row.xMax - 156f, row.y + 34f, 44f, 22f),
+                on ? "ON" : "OFF", on ? Teal : Dimc);
             var t = R(row.xMax - 100f, row.y + 26f, 84f, 40f);
-            UiKit.Pill(t, on ? new Color(Teal.r, Teal.g, Teal.b, 0.16f) : new Color(0.63f, 0.71f, 1f, 0.08f),
-                on ? new Color(Teal.r, Teal.g, Teal.b, 0.55f) : Line(0.26f));
+            UiKit.Pill(t, on ? new Color(Teal.r, Teal.g, Teal.b, 0.20f) : new Color(0.63f, 0.71f, 1f, 0.10f),
+                on ? new Color(Teal.r, Teal.g, Teal.b, 0.65f) : Line(0.30f));
             var knob = Cx(on ? t.xMax - 22f : t.x + 22f, t.center.y, 30f, 30f);
-            UiKit.Glow(knob, on ? new Color(Teal.r, Teal.g, Teal.b, 0.35f) : new Color(0f, 0f, 0f, 0f));
+            UiKit.Glow(knob, on ? new Color(Teal.r, Teal.g, Teal.b, 0.40f) : new Color(0f, 0f, 0f, 0f));
             UiKit.Sprite(knob, UiKit.Disc, on ? Teal : Muted);
             if (GUI.Button(row, GUIContent.none, _invisible)) toggle();
-            UiKit.Line(R(row.x, row.yMax, row.width, 1f), Line(0.07f));
+            UiKit.Line(R(row.x, row.yMax, row.width, 1f), Line(0.10f));
             return y + 92f;
         }
 
@@ -830,43 +897,56 @@ namespace AuroraRift
 
             // 原版结算是一张 340px 宽的面板卡，整张垂直居中（不是贴顶排一条长列）
             const float cardW = 680f;
-            float cardH = 980f;
+            float cardH = 920f;
             var card = Cx(cx, RefH * 0.5f, cardW, cardH);
-            UiKit.Panel(card, new Color(0.035f, 0.055f, 0.117f, 0.96f), Line(0.18f), 20f);
-            UiKit.Line(R(card.x + 56f, card.y + 1f, card.width - 112f, 2f), new Color(1f, 1f, 1f, 0.06f));
+            UiKit.Glow(Cx(card.center.x, card.center.y, cardW * 1.25f, cardH * 1.15f),
+                new Color(Rose.r, Rose.g, Rose.b, 0.055f));
+            UiKit.SlabGrad(card, new Color(0.085f, 0.075f, 0.145f, 0.96f),
+                new Color(0.014f, 0.020f, 0.048f, 0.96f), Line(0.22f), 20f);
+            UiKit.Line(R(card.x + 30f, card.y + 1f, card.width - 60f, 2f),
+                new Color(Rose.r, Rose.g, Rose.b, 0.60f));
 
-            float y = card.y + 40f;
-            Txt(Label(17, Rose, TextAnchor.MiddleCenter), R(card.x, y, card.width, 24f), Sp("RUN TERMINATED"), Rose);
-            y += 34f;
-            Bold(_h1c, R(card.x, y, card.width, 72f), "巡航终止", Paper, 2f);
-            y += 76f;
-            Txt(Label(19, Muted, TextAnchor.MiddleCenter), R(card.x, y, card.width, 28f), "信号消失在裂隙深处。",
-                new Color(Muted.r, Muted.g, Muted.b, 0.9f));
-            y += 44f;
+            float y = card.y + 36f;
+            Txt(Label(16, Rose, TextAnchor.MiddleCenter), R(card.x, y, card.width, 22f),
+                Sp("RUN TERMINATED"), Rose);
+            y += 30f;
+            Bold(Label(64, Paper, TextAnchor.MiddleCenter), R(card.x, y, card.width, 76f), "巡航终止", Paper, 2f);
+            y += 80f;
+            Txt(Label(18, Muted, TextAnchor.MiddleCenter), R(card.x, y, card.width, 26f), "信号消失在裂隙深处。", Muted);
+            y += 40f;
 
-            // 分数 + 评级圆章
-            var scoreBox = R(card.x + 44f, y, card.width - 232f, 110f);
-            Txt(Label(15, Dimc, TextAnchor.UpperLeft), R(scoreBox.x, scoreBox.y, scoreBox.width, 22f),
-                Sp("SCORE"), Dimc);
-            GlowText(_numBig, R(scoreBox.x, scoreBox.y + 24f, scoreBox.width, 76f),
+            // 分数 + 菱形评级章
+            var scoreBox = R(card.x + 44f, y, card.width - 220f, 112f);
+            Txt(Label(14, TealDim, TextAnchor.UpperLeft), R(scoreBox.x, scoreBox.y, scoreBox.width, 20f),
+                Sp("SCORE"), TealDim);
+            GlowText(Label(64, Paper, TextAnchor.MiddleLeft), R(scoreBox.x, scoreBox.y + 22f, scoreBox.width, 84f),
                 Mathf.RoundToInt(root.Score).ToString("N0"), Paper, Teal, TextAnchor.MiddleLeft);
-            var rank = Cx(card.xMax - 96f, y + 60f, 104f, 104f);
+            var rank = Cx(card.xMax - 96f, y + 58f, 108f, 108f);
             var rc = root.Grade switch { 4 => Teal, 3 => Violet, 2 => Gold, _ => Muted };
-            UiKit.Pill(rank, new Color(rc.r, rc.g, rc.b, 0.08f), new Color(rc.r, rc.g, rc.b, 0.5f));
-            Bold(Label(48, rc, TextAnchor.MiddleCenter), R(rank.x, rank.y + 20f, rank.width, 54f), root.GradeText, rc, 1.6f);
-            Txt(Label(11, rc, TextAnchor.MiddleCenter), R(rank.x, rank.y + 72f, rank.width, 18f), Sp("RANK"),
-                new Color(rc.r, rc.g, rc.b, 0.7f));
+            UiKit.Glow(Cx(rank.center.x, rank.center.y, 150f, 150f), new Color(rc.r, rc.g, rc.b, 0.16f));
+            UiKit.Slab(rank, new Color(rc.r, rc.g, rc.b, 0.10f), new Color(rc.r, rc.g, rc.b, 0.65f), 52f);
+            Bold(Label(46, rc, TextAnchor.MiddleCenter), R(rank.x, rank.y + 22f, rank.width, 52f), root.GradeText, rc, 1.6f);
+            Txt(Label(10, rc, TextAnchor.MiddleCenter), R(rank.x, rank.y + 72f, rank.width, 16f), Sp("RANK"),
+                new Color(rc.r, rc.g, rc.b, 0.75f));
             y += 122f;
+
+            UiKit.Line(R(card.x + 44f, y, card.width - 88f, 1f), Line(0.14f));
+            UiKit.Sprite(Cx(card.center.x, y, 7f, 7f), UiKit.Diamond, new Color(Teal.r, Teal.g, Teal.b, 0.55f));
+            y += 20f;
 
             if (root.Score >= root.Best && root.Score > 0)
             {
-                Txt(Label(17, Gold, TextAnchor.MiddleCenter), R(card.x, y, card.width, 24f), "◆ 新纪录 ◆", Gold);
-                y += 30f;
+                var rec = Cx(card.center.x, y + 12f, 170f, 30f);
+                UiKit.Slab(rec, new Color(Gold.r, Gold.g, Gold.b, 0.14f), new Color(Gold.r, Gold.g, Gold.b, 0.55f), 8f);
+                Txt(Label(15, Gold, TextAnchor.MiddleCenter), rec, Sp("NEW RECORD"), Gold);
             }
-            Txt(Label(16, Dimc, TextAnchor.MiddleCenter), R(card.x, y, card.width, 24f),
-                root.NextGradeGap > 0f ? "距上一档还差 " + Mathf.RoundToInt(root.NextGradeGap) + " 分" : "评级：按得分与最远星区综合判定",
-                Dimc);
-            y += 40f;
+            else
+            {
+                Txt(Label(15, Dimc, TextAnchor.MiddleCenter), R(card.x, y, card.width, 24f),
+                    root.NextGradeGap > 0f ? "距上一档还差 " + Mathf.RoundToInt(root.NextGradeGap) + " 分"
+                                           : "评级：按得分与最远星区综合判定", Dimc);
+            }
+            y += 38f;
 
             // 十项数据（卡内两列五行）
             string[,] grid =
@@ -886,30 +966,33 @@ namespace AuroraRift
             for (int i = 0; i < 10; i++)
             {
                 int col = i % 2, row = i / 2;
-                var r = R(card.x + 44f + col * (gw + 12f), y + row * 66f, gw, 58f);
-                UiKit.Panel(r, new Color(0.02f, 0.031f, 0.075f, 0.6f), Line(0.09f), 8f);
-                Txt(Label(15, Dimc, TextAnchor.MiddleLeft), R(r.x + 14f, r.y + 6f, r.width - 28f, 20f), grid[i, 0], Dimc);
-                Bold(Label(26, InkText, TextAnchor.MiddleLeft), R(r.x + 14f, r.y + 26f, r.width - 28f, 28f), grid[i, 1],
-                    InkText, 1.3f);
+                var r = R(card.x + 44f + col * (gw + 12f), y + row * 58f, gw, 52f);
+                UiKit.Slab(r, new Color(0.022f, 0.036f, 0.082f, 0.72f), Line(0.11f), 7f);
+                UiKit.Line(R(r.x + 12f, r.y + 8f, 2f, r.height - 16f),
+                    new Color(Teal.r, Teal.g, Teal.b, i % 2 == 0 ? 0.35f : 0.18f));
+                Txt(Label(13, Dimc, TextAnchor.MiddleLeft), R(r.x + 22f, r.y + 4f, r.width - 32f, 18f), grid[i, 0], Dimc);
+                Bold(Label(23, InkText, TextAnchor.MiddleLeft), R(r.x + 22f, r.y + 22f, r.width - 32f, 26f), grid[i, 1],
+                    InkText, 1.2f);
             }
-            y += 5 * 66f + 14f;
+            y += 5 * 58f + 10f;
 
             if (root.LastClearLines != null && root.LastClearLines.Length > 0)
             {
-                Txt(Label(15, Dimc, TextAnchor.MiddleCenter), R(card.x + 24f, y, card.width - 48f, 22f),
+                Txt(Label(12, Dimc, TextAnchor.MiddleCenter), R(card.x + 24f, y, card.width - 48f, 20f),
                     string.Join("  ·  ", root.LastClearLines), Dimc);
-                y += 30f;
+                y += 24f;
             }
 
-            var retry = Cx(cx, y + 48f, card.width - 88f, 92f);
+            var retry = Cx(cx, y + 57f, card.width - 88f, 94f);
             UIButtonFrame(retry, true);
+            UiKit.Line(R(retry.x + 18f, retry.y + 1f, retry.width - 36f, 2f), new Color(1f, 1f, 1f, 0.35f));
             Txt(_btn, retry, "再次出击", new Color(0.02f, 0.06f, 0.11f));
-            Txt(_kbd, R(retry.xMax - 52f, retry.y + 36f, 40f, 20f), "R", new Color(0.02f, 0.06f, 0.11f, 0.45f));
+            Txt(_kbd, R(retry.xMax - 52f, retry.y + 37f, 40f, 20f), "R", new Color(0.02f, 0.06f, 0.11f, 0.5f));
             if (GUI.Button(retry, GUIContent.none, _invisible)) root.Restart();
 
-            var menu = Cx(cx, y + 140f, card.width - 88f, 48f);
-            UiKit.Panel(menu, new Color(0.047f, 0.075f, 0.149f, 0.5f), Line(0.18f), 6f);
-            Txt(Label(17, Muted, TextAnchor.MiddleCenter), menu, "返回基地", Muted);
+            var menu = Cx(cx, y + 146f, card.width - 88f, 60f);
+            UIButtonFrame(menu, false);
+            Txt(Label(18, Muted, TextAnchor.MiddleCenter), menu, "返回基地", Muted);
             if (GUI.Button(menu, GUIContent.none, _invisible)) root.BackToMenu();
         }
 
@@ -924,7 +1007,7 @@ namespace AuroraRift
         void Dim()
         {
             var prev = GUI.color;
-            GUI.color = new Color(0.012f, 0.02f, 0.047f, 0.62f);
+            GUI.color = new Color(0.008f, 0.014f, 0.034f, 0.74f);
             GUI.DrawTexture(R(0, 0, w(), RefH), UiKit.White);
             GUI.color = prev;
         }
@@ -935,10 +1018,11 @@ namespace AuroraRift
         void UIButtonFrame(Rect r, bool primary)
         {
             if (primary)
-                UiKit.PanelGrad(r, new Color(0.57f, 0.97f, 0.91f), new Color(0.66f, 0.61f, 1f),
-                    new Color(1f, 1f, 1f, 0.22f), 6f);
+                UiKit.SlabGrad(r, new Color(0.60f, 0.98f, 0.92f), new Color(0.45f, 0.53f, 1f),
+                    new Color(1f, 1f, 1f, 0.34f), 10f);
             else
-                UiKit.Panel(r, new Color(0.047f, 0.075f, 0.149f, 0.6f), Line(0.26f), 6f);
+                UiKit.SlabGrad(r, new Color(0.10f, 0.16f, 0.28f, 0.82f),
+                    new Color(0.025f, 0.045f, 0.10f, 0.82f), Line(0.30f), 10f);
         }
 
         // 透明按钮样式（只吃输入，不画）

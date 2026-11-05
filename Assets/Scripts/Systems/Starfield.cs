@@ -146,7 +146,11 @@ namespace AuroraRift
                     p.x = Random.Range(-GameConfig.WorldWidth, GameConfig.WorldWidth) * 0.75f;
                 }
                 s.Tr.position = p;
-                var tint = Color.Lerp(Color.white, _current * 2.2f, 0.35f);
+                // 远星冷蓝、近星暖白：加一层色差，深空才有前后景
+                Color far = new Color(0.62f, 0.78f, 1f);
+                Color near = new Color(1f, 0.95f, 0.86f);
+                var depthTint = Color.Lerp(far, near, s.Depth);
+                var tint = Color.Lerp(depthTint, _current * 2.2f, 0.28f);
                 s.Sr.color = new Color(tint.r, tint.g, tint.b, (0.18f + s.Depth * 0.5f) * s.Bright);
             }
         }

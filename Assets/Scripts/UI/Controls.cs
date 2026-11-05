@@ -41,7 +41,7 @@ namespace AuroraRift
         {
             float w = RefW;
             const float ring = 80f;                    // 网页版 40px 直径 → 80 参考单位
-            float cy = BandTop + 62f;
+            float cy = BandTop + 58f;
 
             NovaRect = C(w - 80f, cy, ring, ring);
             DashRect = C(NovaRect.center.x - 98f, cy, ring, ring);

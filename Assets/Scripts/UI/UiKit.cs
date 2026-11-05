@@ -473,5 +473,61 @@ namespace AuroraRift
             GUI.color = prev;
             if (border.a > 0.001f) Panel(r, new Color(0, 0, 0, 0), border, radius);
         }
+
+        static readonly Dictionary<long, Texture2D> _slabGrads = new Dictionary<long, Texture2D>();
+
+        /// <summary>切角八边形渐变面板：主按钮、卡片、HUD 底板统一用这一种表面。</summary>
+        public static void SlabGrad(Rect r, Color top, Color bottom, Color border, float cut = 16f)
+        {
+            if (r.width < 2f || r.height < 2f) return;
+            int w = Mathf.Max(4, Mathf.RoundToInt(r.width));
+            int h = Mathf.Max(4, Mathf.RoundToInt(r.height));
+            cut = Mathf.Clamp(cut, 0f, Mathf.Min(w, h) * 0.5f - 1f);
+            long key = ((long)w << 40) ^ ((long)h << 20) ^ (long)(cut * 10f)
+                       ^ ((long)(top.GetHashCode() & 0xFFFFF) << 2)
+                       ^ (long)(bottom.GetHashCode() & 0x3);
+            var tex = _slabGrads.TryGetValue(key, out var cached) ? cached : null;
+            if (tex == null)
+            {
+                if (_slabGrads.Count > 32)
+                {
+                    foreach (var t in _slabGrads.Values) if (t != null) Object.Destroy(t);
+                    _slabGrads.Clear();
+                }
+                tex = MakeSlabGrad(w, h, cut, top, bottom);
+                _slabGrads[key] = tex;
+            }
+            var prev = GUI.color;
+            GUI.color = Color.white;
+            GUI.DrawTexture(r, tex);
+            GUI.color = prev;
+            if (border.a > 0.001f) Slab(r, new Color(0f, 0f, 0f, 0f), border, cut);
+        }
+
+        static Texture2D MakeSlabGrad(int w, int h, float cut, Color top, Color bottom)
+        {
+            var tex = new Texture2D(w, h, TextureFormat.RGBA32, false) { wrapMode = TextureWrapMode.Clamp };
+            var px = new Color32[w * h];
+            for (int y = 0; y < h; y++)
+            {
+                var row = Color.Lerp(bottom, top, h <= 1 ? 0f : y / (float)(h - 1));
+                for (int x = 0; x < w; x++)
+                {
+                    float acc = 0f;
+                    for (int sy = 0; sy < 2; sy++)
+                        for (int sx = 0; sx < 2; sx++)
+                        {
+                            float fx = x + 0.25f + sx * 0.5f;
+                            float fy = y + 0.25f + sy * 0.5f;
+                            if (InOctagon(fx, fy, w, h, cut)) acc += 0.25f;
+                        }
+                    var c = row;
+                    c.a *= acc;
+                    px[y * w + x] = c;
+                }
+            }
+            tex.SetPixels32(px); tex.Apply();
+            return tex;
+        }
     }
 }
