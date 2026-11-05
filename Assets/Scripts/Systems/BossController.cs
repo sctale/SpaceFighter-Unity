@@ -37,7 +37,6 @@ namespace AuroraRift
         bool _dead;
         bool _desperate;
         Difficulty _diff;
-        int _hitsAtSpawn;
 
         // ---- 招式状态机（原版 this.attack = {name, t, fired, emit, angle, data}）----
         BossMove _move;
@@ -157,7 +156,6 @@ namespace AuroraRift
 
             _timer = GameConfig.BossInitialCd;
             GameRoot.Instance?.Announce(BossLabel, BossTitle, 2.4f, true);
-            _hitsAtSpawn = GameRoot.Instance != null ? GameRoot.Instance.Stats.Hits : 0;
         }
 
         void Update()
@@ -195,8 +193,6 @@ namespace AuroraRift
                     if (!_casting && _telegraph <= 0f) _castLabel = "";
                     // 醒来的第一招最迟 0.55 秒后开始；NaN/Infinity 一律拉回正常值
                     _timer = ResumeTimer(_timer);
-                    Debug.Log($"[BOSS-RESUME] t={Time.time:F1} casting={_casting} " +
-                              $"move={_move} timer={_timer:F2} telegraph={_telegraph:F2}");
                 }
                 Hover(dt);      // 移动类招式被冻结时 _lockMove 仍为 true，不会抢位置
                 return;
@@ -1037,12 +1033,6 @@ namespace AuroraRift
             sr.sortingOrder = 12;
             go.transform.localScale = Vector3.one * 1.5f;
             go.AddComponent<Shockwave>();
-        }
-
-        static Vector2 Rot(Vector2 v, float deg)
-        {
-            float rad = deg * Mathf.Deg2Rad, c = Mathf.Cos(rad), s = Mathf.Sin(rad);
-            return new Vector2(v.x * c - v.y * s, v.x * s + v.y * c);
         }
 
         /// <summary>

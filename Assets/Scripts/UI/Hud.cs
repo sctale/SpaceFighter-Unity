@@ -241,7 +241,6 @@ namespace AuroraRift
 
         void DrawMenu(GameRoot root, float w, float top, float bottom)
         {
-            var dir = Director.Instance;
             float t = Time.unscaledTime - _stateAt;
             float pad = 36.8f;                       // --pad @540
             float cx = w * 0.5f;
@@ -306,7 +305,7 @@ namespace AuroraRift
                 UiKit.Line(R(card.center.x, card.y + 30f, 2f, 72f), Line(0.16f));
                 Txt(_tiny, R(card.center.x + 40f, card.y + 26f, 260f, 24f), "最远星区", Dimc);
                 Bold(_num, R(card.center.x + 40f, card.y + 54f, 300f, 56f),
-                    (dir != null ? dir.Zone : 1).ToString("00"), Paper, 2f);
+                    root.BestZone.ToString("00"), Paper, 2f);
                 y += 168f;
             }
 
@@ -375,7 +374,7 @@ namespace AuroraRift
             }
 
             Txt(_tiny, Center(w, RefH - bottom - 24f, 900f, 24f),
-                Sp("v0.21.7") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
+                Sp("v0.21.8") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc);
         }
 
         /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
@@ -881,7 +880,7 @@ namespace AuroraRift
                 { "相位穿越", s.Phases.ToString() },
                 { "核心破防", s.Breaks.ToString() },
                 { "受创", s.Hits.ToString() },
-                { "最高倍率", "×" + Mathf.Max(1, root.Multiplier) },
+                { "最高倍率", "×" + (1 + Mathf.Min(GameConfig.ComboMaxMult, s.MaxCombo / GameConfig.ComboStep)) },
             };
             float gw = (card.width - 88f - 12f) * 0.5f;
             for (int i = 0; i < 10; i++)

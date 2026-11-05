@@ -1,5 +1,43 @@
 # 更新记录
 
+## v0.21.8 — 2026-11-05
+
+一轮整项目代码审查后的修复批次，聚焦玩法正确性、暂停语义与 HUD 数据一致性。
+
+### 玩法正确性
+
+- **贯穿弹重复扣血**：`Projectile` 新增已命中目标集合，`Director` 对同一敌机只结算一次；
+  对齐网页版 `Bullet.hitSet`（entities.js:45 / game.js:827-833）。棱镜与僚机 beam
+  停在敌机体内不再逐帧连击。
+- **暂停不冻结弹幕**：`BulletPool` 在 `Paused/Menu` 跳过 `Tick`；暂停期间敌弹不再继续飞、
+  到期或消失（`Dead` 仍推进，保留死亡慢镜）。
+- **暂停销毁 Boss 光束**：`BossLaser` 暂停时只冻结、不再 `Kill`，恢复后剩余节拍仍有光束。
+- **弹池重复释放**：`BulletPool.Release` 先确认弹体仍在活动表，避免 `TrimEnemyBullets`
+  在 Burst 链中提前释放后又被二次压入空闲栈、同一实例被两次复用。
+
+### HUD 与持久化
+
+- **静音**：启动时应用已保存的静音状态；`SetMuted` 同时静音 `_drone/_pulse` 两层音乐，
+  「音乐与音效」开关真正全部生效。
+- **结算「最高倍率」**：改用 `Stats.MaxCombo` 换算，不再因死亡前舰体受击清零 `Combo`
+  而恒显示 ×1。
+- **菜单「最远星区」**：新增 `GameRoot.BestZone` 持久化（`aurora.bestzone`），
+  返回基地后不再回落为 01。
+- **UiKit.Arc 纹理缓存**：缓存键补上尺寸，清理缓存时 `Destroy` 旧纹理，
+  消除充能环/动作环同帧反复重建造成的原生内存上涨。
+
+### 清理
+
+- 删除破防结束时遗留的 `[BOSS-RESUME]` 调试日志。
+- 移除未使用的 `Director.EnemyBulletSpeed`、`BossController._hitsAtSpawn`、
+  `EnemyShip.MarkCounted/Rot`、`BossController.Rot`、`BuildScript.EnsureUiMaterials/EnsureMat`。
+
+### 验收
+
+- Unity `-batchmode -nographics` 编译：**0 error**。
+- 数值门禁 `VerifyNumbers`：**446/446**。
+- APK 信息见 `docs/RELEASE-v0.21.8.md`。
+
 ## v0.21.7 — 2026-11-04
 
 找到"左上角分数被挡住"的真因：**不是两行重叠，是字形被裁剪框切掉半截**。

@@ -84,7 +84,10 @@ namespace AuroraRift
         void Update()
         {
             var root = GameRoot.Instance;
-            if (root == null || root.State != GameState.Playing) { Kill(); return; }
+            if (root == null) { Kill(); return; }
+            // 暂停只是冻结：不能把光束删掉，否则恢复后这一招剩余节拍会没有光束
+            if (root.State == GameState.Paused) return;
+            if (root.State != GameState.Playing) { Kill(); return; }
 
             float dt = Time.deltaTime;
             _t += dt;

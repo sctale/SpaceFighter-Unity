@@ -22,6 +22,11 @@ namespace AuroraRift
 
         void Update()
         {
+            // 暂停/菜单时不推进弹体：暂停只切 State、不改 timeScale，其他玩法脚本都已按 State 冻结，
+            // 这里漏掉会让敌弹在暂停期间继续飞、到期甚至消失。Dead 仍推进，保留死亡慢镜里的弹幕。
+            var root = GameRoot.Instance;
+            if (root != null && (root.State == GameState.Paused || root.State == GameState.Menu)) return;
+
             float dt = Time.deltaTime;
             for (int i = _active.Count - 1; i >= 0; i--)
             {
@@ -77,7 +82,9 @@ namespace AuroraRift
         public void Release(Projectile p)
         {
             if (p == null) return;
-            _active.Remove(p);
+            // 已经释放过就不要再入栈：TrimEnemyBullets 可能在 Burst 调用链里先收掉正在 Tick 的这颗弹，
+            // 随后 Tick 末尾会再 Release 一次；不查重会让同一实例在 _free 里出现两次，被两次 Spawn 复用。
+            if (!_active.Remove(p)) return;
             p.gameObject.SetActive(false);
             _free.Push(p);
         }

@@ -52,6 +52,19 @@ namespace AuroraRift
         public bool Grazed;
         public bool Phased;
 
+        /// <summary>
+        /// 贯穿弹已经结算过的目标（实例 ID）。网页版靠 Bullet.hitSet 去重（entities.js:45、game.js:827-833）；
+        /// 少了它，棱镜/僚机 beam 停在敌机体内会逐帧重复扣血。
+        /// </summary>
+        System.Collections.Generic.HashSet<int> _hitTargets;
+
+        /// <summary>贯穿弹去重：返回 true 表示这颗弹第一次命中该目标。</summary>
+        public bool RegisterTarget(int id)
+        {
+            if (_hitTargets == null) _hitTargets = new System.Collections.Generic.HashSet<int>();
+            return _hitTargets.Add(id);
+        }
+
         SpriteRenderer _sr;
         float _age;
         float _seed = Random.value * 10f;   // 原版每颗弹的随机相位（波动弹与破片角度都靠它去重）
@@ -108,6 +121,7 @@ namespace AuroraRift
             Life = life > 0f ? life : GameConfig.BulletLifetime;
             Grazed = false;
             Phased = false;
+            _hitTargets = null;
             SplitOnExpire = 0;
             Fuse = 0f;
             Wave = 0f;

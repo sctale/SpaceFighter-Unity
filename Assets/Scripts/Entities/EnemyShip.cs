@@ -488,12 +488,6 @@ namespace AuroraRift
             return p;
         }
 
-        static Vector2 Rot(Vector2 v, float deg)
-        {
-            float rad = deg * Mathf.Deg2Rad, c = Mathf.Cos(rad), s = Mathf.Sin(rad);
-            return new Vector2(v.x * c - v.y * s, v.x * s + v.y * c);
-        }
-
         /// <summary>受击/蓄力/装甲/旋转环，全部走叠加层，不动本体颜色。</summary>
         void TickVisuals(float dt)
         {
@@ -567,8 +561,5 @@ namespace AuroraRift
             p.Fuse = GameConfig.VolatileFuse;
             p.SplitOnExpire = GameConfig.VolatileSplit;
         }
-
-        /// <summary>供导演在真正结算时调用（分数、掉落、星爆充能都在 GameRoot.KillEnemy 里）。</summary>
-        public void MarkCounted() { _dead = true; }
     }
 }

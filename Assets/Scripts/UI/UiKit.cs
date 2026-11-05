@@ -15,7 +15,7 @@ namespace AuroraRift
         static Texture2D _gradTeal, _gradRose, _gradGold;
 
         static readonly Dictionary<long, Texture2D> _rounds = new Dictionary<long, Texture2D>();
-        static readonly Dictionary<int, Texture2D> _arcs = new Dictionary<int, Texture2D>();
+        static readonly Dictionary<long, Texture2D> _arcs = new Dictionary<long, Texture2D>();
 
         public static Texture2D White => _white != null ? _white : (_white = Solid());
         public static Texture2D Disc => _disc != null ? _disc : (_disc = MakeDisc(64));
@@ -331,10 +331,16 @@ namespace AuroraRift
             int key = Mathf.RoundToInt(Mathf.Clamp01(pct) * 200f);
             if (key <= 0) return;
             int size = Mathf.Max(24, Mathf.RoundToInt(r.width));
-            int cacheKey = key * 4096 + Mathf.RoundToInt(thickness * 10f);
-            if (!_arcs.TryGetValue(cacheKey, out var tex) || tex == null || tex.width != size)
+            // 缓存键必须带 size：充能环 52×52 与动作环 68×68 都可能同为 pct=1/thickness=5，
+            // 少了尺寸会每帧在两者间反复重建纹理，旧 Texture2D 还没人 Destroy（原生内存持续上涨）。
+            long cacheKey = ((long)key * 1000 + Mathf.RoundToInt(thickness * 10f)) * 10000 + size;
+            if (!_arcs.TryGetValue(cacheKey, out var tex) || tex == null)
             {
-                if (_arcs.Count > 240) _arcs.Clear();
+                if (_arcs.Count > 240)
+                {
+                    foreach (var t in _arcs.Values) if (t != null) Object.Destroy(t);
+                    _arcs.Clear();
+                }
                 tex = MakeArc(size, key / 200f, thickness);
                 _arcs[cacheKey] = tex;
             }

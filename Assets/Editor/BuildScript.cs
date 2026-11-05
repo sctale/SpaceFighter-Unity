@@ -177,41 +177,12 @@ namespace AuroraRift.EditorTools
             Debug.Log($"[Aurora] Android tools sdk={sdk} ndk={ndk} jdk={jdk}");
         }
 
-        /// <summary>
-        /// 场景与 UI 全是运行时代码创建，shader 剥离会让界面变品红。
-        /// 做法：在 Resources 里放两个材质，构建时按引用把 shader 带进包，运行时由 Hud 显式赋给 Text/Image。
-        /// （不要改 ProjectSettings/GraphicsSettings.asset —— 实测会让批处理编辑器崩溃。）
-        /// </summary>
-        static void EnsureUiMaterials()
-        {
-            const string resDir = "Assets/Resources";
-            System.IO.Directory.CreateDirectory(resDir);
-
-            EnsureMat(resDir + "/AuroraUiText.mat", "UI/Default Font");
-            EnsureMat(resDir + "/AuroraUiImage.mat", "UI/Default");
-            AssetDatabase.Refresh();
-        }
-
-        static void EnsureMat(string path, string shaderName)
-        {
-            if (System.IO.File.Exists(path)) return;
-            var sh = Shader.Find(shaderName);
-            if (sh == null)
-            {
-                Debug.LogWarning("[Aurora] shader not found: " + shaderName);
-                return;
-            }
-            var mat = new Material(sh);
-            AssetDatabase.CreateAsset(mat, path);
-            Debug.Log("[Aurora] created material " + path);
-        }
-
         static void ConfigurePlayer()
         {
             PlayerSettings.companyName = "sctale";
             PlayerSettings.productName = "Aurora Rift";
-            PlayerSettings.bundleVersion = "0.21.7";
-            PlayerSettings.Android.bundleVersionCode = 35;
+            PlayerSettings.bundleVersion = "0.21.8";
+            PlayerSettings.Android.bundleVersionCode = 36;
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.sctale.spacefighter");
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
             PlayerSettings.allowedAutorotateToPortrait = true;

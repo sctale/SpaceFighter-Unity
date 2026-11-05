@@ -25,6 +25,8 @@ namespace AuroraRift
         public GameState State { get; private set; } = GameState.Menu;
         public float Score { get; private set; }
         public int Best { get; private set; }
+        /// <summary>历史最远星区（持久化）。开始菜单显示它，而不是当前这局的 Director.Zone。</summary>
+        public int BestZone { get; private set; } = 1;
         public Difficulty Difficulty { get; private set; }
         public RunStats Stats { get; private set; } = new RunStats();
 
@@ -129,6 +131,7 @@ namespace AuroraRift
             Instance = this;
             Application.targetFrameRate = 60;
             Best = PlayerPrefs.GetInt("aurora.best", 0);
+            BestZone = Mathf.Clamp(PlayerPrefs.GetInt("aurora.bestzone", 1), 1, 10);
             Difficulty = Difficulties.ById(PlayerPrefs.GetString("aurora.diff", "standard"));
             LowFx = PlayerPrefs.GetInt("aurora.lowfx", 0) == 1;
             HighContrast = PlayerPrefs.GetInt("aurora.contrast", 0) == 1;
@@ -166,6 +169,16 @@ namespace AuroraRift
         }
 
         public void AddScore(float v) => Score += v;
+
+        /// <summary>到达新星区时记录最远进度：返回基地会重建 Director，菜单不能读实时 Zone。</summary>
+        public void ReportZone(int zone)
+        {
+            int z = Mathf.Clamp(zone, 1, 10);
+            if (z <= BestZone) return;
+            BestZone = z;
+            PlayerPrefs.SetInt("aurora.bestzone", BestZone);
+            PlayerPrefs.Save();
+        }
 
         /// <summary>击杀计分：基础分 × 连锁倍率 × 难度倍率。</summary>
         public int AddKilledScore(float baseScore)

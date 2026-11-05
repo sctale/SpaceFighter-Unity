@@ -38,6 +38,9 @@ namespace AuroraRift
             _explode = BuildNoise(0.42f, 2.2f);
             _pickup = BuildChime();
             _warn = BuildSweep(280f, 620f, 0.28f);
+
+            // 应用上次保存的静音：以前只在按开关时调用 SetMuted，重启后已保存的静音状态等于没生效
+            SetMuted(GameRoot.Instance != null && GameRoot.Instance.Muted);
         }
 
         AudioSource MakeSource(string name, float vol)
@@ -101,7 +104,10 @@ namespace AuroraRift
         public void SetMuted(bool muted)
         {
             _muted = muted;
+            // 「音乐与音效」是一个开关，音乐两层也必须一起静，否则关掉后 BGM 还在响
             if (_sfx != null) _sfx.mute = muted;
+            if (_drone != null) _drone.mute = muted;
+            if (_pulse != null) _pulse.mute = muted;
         }
 
         // ---- 波形合成 ----

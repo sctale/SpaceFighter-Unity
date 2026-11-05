@@ -21,10 +21,6 @@ namespace AuroraRift
         public BossController Boss { get; private set; }
         public Difficulty Diff => GameRoot.Instance != null ? GameRoot.Instance.Difficulty : Difficulties.Standard;
 
-        /// <summary>敌弹速度：原版 min(300, 150×dif) × 难度系数，换算成世界单位。</summary>
-        public float EnemyBulletSpeed =>
-            Mathf.Min(300f, 150f) * Diff.BulletSpeed * GameConfig.Px;
-
         /// <summary>原版「5 关一档弹幕强度」：tier = min(3, floor((s-1)/5))。</summary>
         public int DensityTier => Mathf.Min(3, (Zone - 1) / 5);
 
@@ -112,6 +108,7 @@ namespace AuroraRift
         void StartSector(int sector)
         {
             Zone = Mathf.Clamp(sector, 1, 10);
+            GameRoot.Instance?.ReportZone(Zone);
             _script.Clear();
             _pending.Clear();
             BuildScript(Zone);
@@ -486,6 +483,8 @@ namespace AuroraRift
                     if (e == null || !e.Targetable()) continue;
                     if (Vector2.Distance(b.transform.position, e.transform.position) <= b.Radius + e.Radius)
                     {
+                        // 贯穿弹对同一敌机只结算一次（原版 hitSet）：否则弹体在体内停留几帧就会连续扣血
+                        if (b.Piercing && !b.RegisterTarget(e.GetInstanceID())) continue;
                         bool killed = e.TakeDamage(b.Damage);
                         if (!killed && root != null && root.Player != null) root.Player.AddNova(GameConfig.NovaOnHitEnemy);
                         // 原版是一颗弹结算完就继续下一颗，这里不能 return，
