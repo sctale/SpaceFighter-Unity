@@ -179,23 +179,17 @@ namespace AuroraRift
                 _entered = true;
             }
 
-            // 打断窗口：破防/技能打断期间冻结「预告、招式节拍、出招计时」三只时钟，
-            // 只让机体悬停。原版也是 broken 期间暂停当前 attack（entities.js:1920-1926）——
-            // 如果让节拍在眩晕里继续跑完，醒来时这一招已经没有子弹可放，看起来就是"不会攻击"。
+            // 破防只做伤害窗口与表现，不再冻结招式节拍/预告/出招计时：
+            // 正在放的招式继续按原节拍走，已经发射的子弹也留在场上。
             if (_stun > 0f)
             {
                 _stun -= dt;
                 if (_stun <= 0f)
                 {
                     _stun = 0f;
-                    if (_casting && (float.IsNaN(_moveT) || float.IsNaN(_moveDur) || _moveT >= _moveDur))
-                        EndMove();
-                    if (!_casting && _telegraph <= 0f) _castLabel = "";
-                    // 醒来的第一招最迟 0.55 秒后开始；NaN/Infinity 一律拉回正常值
+                    // 只做异常防御：招式计时被外力改坏时拉回正常值
                     _timer = ResumeTimer(_timer);
                 }
-                Hover(dt);      // 移动类招式被冻结时 _lockMove 仍为 true，不会抢位置
-                return;
             }
             if (_stun < 0f) _stun = 0f;
 
@@ -205,16 +199,15 @@ namespace AuroraRift
             float frac = Hp / Mathf.Max(1f, MaxHp);
             int wantPhase = frac > GameConfig.BossPhaseHigh ? 0
                           : frac > GameConfig.BossPhaseLow ? 1 : 2;
-            if (wantPhase != _phase) { EnterPhase(wantPhase); return; }
+            // 阶段/临界只在「招式间隙」切换：正在放的招式必须走完，已经发射的子弹/光束也不清。
+            bool idle = !_casting && _telegraph <= 0f && _pending.Count == 0;
+            if (wantPhase != _phase && idle) { EnterPhase(wantPhase); return; }
 
             // 临界（entities.js:1903-1910）：三阶段 + 血量 <12 %，一次性触发，之后几乎不出停顿
-            if (!_desperate && _phase == 2 && frac < GameConfig.BossDesperateFrac)
+            if (!_desperate && _phase == 2 && frac < GameConfig.BossDesperateFrac && idle)
             {
                 _desperate = true;
                 _index = 0;
-                _casting = false; _emitter = null; _lockMove = false; _castLabel = "";
-                _moveT = 0f; _moveDur = 0f; _telegraph = -1f;
-                _pending.Clear(); BossLaser.ClearAll();
                 _timer = GameConfig.BossDesperateCd;
                 root.Hitstop(GameConfig.FreezeDesperate);
                 root.Announce("OVERLOAD", "核心临界 · 招式不再停顿", 1.6f, true);
@@ -288,14 +281,10 @@ namespace AuroraRift
             Phase = want;          // 公开属性给 HUD/探针用；之前只改 _phase，面板永远显示 P1
             _index = 0;
             _spellCount = 0;
-            // 原版换阶段会把破防槽和破防状态一起清零，并打断当前招式
             BreakGauge = 0f;
             _stun = 0f;
-            _casting = false; _emitter = null; _lockMove = false; _castLabel = "";
-            _moveT = 0f; _moveDur = 0f;
-            _pending.Clear();
-            BossLaser.ClearAll();
-            GameRoot.Instance?.ClearEnemyBullets(true);
+            // 只在招式间隙进来：不取消当前招式，也不清已经发射的子弹与光束。
+            // 阶段只改变后续招式的强度与弹速，场上已有弹幕继续飞完。
             TriggerShockwave();
             GameRoot.Instance?.Hitstop(GameConfig.FreezePhase);
             GameRoot.Instance?.Announce("PHASE " + (_phase + 1), "核心过载 · 弹幕强化", 1.4f, true);
@@ -1058,23 +1047,15 @@ namespace AuroraRift
             {
                 BreakGauge = 0f;
                 _stun = GameConfig.BossBreakStun;
-                // 破防不再打断当前招式：原版会 cancel，但实测玩家持续输出时每 4 秒就打断一次，
-                // 招式永远放不完，Boss 显得"不会还手"。这里保留伤害倍率与破防提示，让招式走完。
-                GameRoot.Instance?.ClearEnemyBullets(false);
+                // 破防不取消当前招式、也不清已经发射的子弹：只保留伤害倍率、提示与轻微反馈。
+                // （以前这里 ClearEnemyBullets(false) 会把玩家正在躲的整屏弹幕直接抹掉，
+                //   看起来就像 Boss 的攻击被硬打断了。）
                 GameRoot.Instance?.RegisterBreak();
                 Haptics.Medium();
                 GameRoot.Instance?.Hitstop(GameConfig.FreezeHit);   // 原版破防钉 50ms
                 GameRoot.Instance?.Announce("CORE BREAK", "核心破防 · 伤害窗口", 1.2f);
             }
             if (Hp <= 0f) Die();
-        }
-
-        static void ClearBullets()
-        {
-            var pool = BulletPool.Instance;
-            if (pool == null) return;
-            for (int i = pool.Active.Count - 1; i >= 0; i--)
-                if (pool.Active[i] != null && pool.Active[i].Team == Team.Enemy) pool.Release(pool.Active[i]);
         }
 
         void Die()

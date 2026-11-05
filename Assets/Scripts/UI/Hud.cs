@@ -414,7 +414,7 @@ namespace AuroraRift
             }
 
             Txt(_tiny, Center(w, RefH - bottom - 34f, 900f, 24f),
-                Sp("v0.21.10") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc, TextAnchor.MiddleCenter);
+                Sp("v0.21.11") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc, TextAnchor.MiddleCenter);
         }
 
         /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
