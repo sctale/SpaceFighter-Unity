@@ -23,10 +23,10 @@ namespace AuroraRift
 
         // ---------------------------------------------------------------- 左上分数块排版
         // 全部是 1920 参考坐标。门禁 beh.hudScore.* 直接读这几个常量，改任何一项都会先被断言拦下。
-        public const float ScoreTop = 40f;      // 50 号分数的排版框顶（整体上移 22.8，贴近安全区）
+        public const float ScoreTop = 26f;      // 50 号分数的排版框顶（贴近安全区，只留 2px 呼吸）
         public const float ScoreBoxH = 52f;     // 排版框高＝视觉行距（比字体行盒矮，靠 FitLine 补齐）
-        public const float BestTop = 98f;       // BEST 行框顶
-        public const float GrazeTop = 124f;     // GRAZE 行框顶
+        public const float BestTop = 84f;       // BEST 行框顶
+        public const float GrazeTop = 110f;     // GRAZE 行框顶
         public const float DigitInk = 55.2f;    // 实测：数字墨迹底 = ScoreTop + 55.2
         public const float BestInk = 7.6f;      // 实测：BEST 行墨迹顶 = BestTop + 7.6
 
@@ -414,7 +414,7 @@ namespace AuroraRift
             }
 
             Txt(_tiny, Center(w, RefH - bottom - 34f, 900f, 24f),
-                Sp("v0.21.13") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc, TextAnchor.MiddleCenter);
+                Sp("v0.21.14") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc, TextAnchor.MiddleCenter);
         }
 
         /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
@@ -486,19 +486,19 @@ namespace AuroraRift
             // 标签在上、数值在下，两列共用同一条基线，避免旧版把 label/value 挤成一行。
             // 50 号数字的墨迹底落在 ScoreTop+55.2，BEST 行墨迹顶在 BestTop+7.6，
             // 两者之间留 CSS 折算的 10.4，分隔线放在这段空隙里。
-            float panelY = topPad + 6f;
-            UiKit.SlabGrad(R(pad - 10f, panelY, 320f, 150f),
+            float panelY = topPad + 2f;
+            UiKit.SlabGrad(R(pad - 10f, panelY, 320f, 146f),
                 new Color(0.065f, 0.105f, 0.185f, 0.72f), new Color(0.006f, 0.010f, 0.028f, 0.72f),
                 Line(0.18f), 18f);
             UiKit.Line(R(pad - 10f, panelY, 320f, 1f), new Color(Teal.r, Teal.g, Teal.b, 0.35f));
-            UiKit.Line(R(pad - 10f, panelY + 18f, 2f, 124f), new Color(Teal.r, Teal.g, Teal.b, 0.65f));
-            UiKit.Sprite(Cx(pad + 3f, panelY + 21f, 6f, 6f), UiKit.Diamond,
+            UiKit.Line(R(pad - 10f, panelY + 14f, 2f, 124f), new Color(Teal.r, Teal.g, Teal.b, 0.65f));
+            UiKit.Sprite(Cx(pad + 3f, panelY + 18f, 6f, 6f), UiKit.Diamond,
                 new Color(Teal.r, Teal.g, Teal.b, 0.65f));
-            Txt(Label(15, TealDim, TextAnchor.UpperLeft), R(pad + 16f, panelY + 14f, 280f, 22f), Sp("SCORE"), TealDim);
+            Txt(Label(15, TealDim, TextAnchor.UpperLeft), R(pad + 16f, panelY + 8f, 280f, 22f), Sp("SCORE"), TealDim);
             Bold(_numBig, R(pad, topPad + ScoreTop, 292f, ScoreBoxH),
                 Mathf.RoundToInt(root.Score).ToString("N0"), Paper, 2f);
 
-            UiKit.Line(R(pad, topPad + 97.5f, 292f, 1f), Line(0.10f));
+            UiKit.Line(R(pad, topPad + 82.5f, 292f, 1f), Line(0.10f));
             float bestY = topPad + BestTop;
             float grazeY = topPad + GrazeTop;
             Txt(Label(14, Gold, TextAnchor.UpperLeft), R(pad, bestY, 136f, 18f), Sp("BEST"),
