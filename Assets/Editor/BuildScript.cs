@@ -181,8 +181,8 @@ namespace AuroraRift.EditorTools
         {
             PlayerSettings.companyName = "sctale";
             PlayerSettings.productName = "Aurora Rift";
-            PlayerSettings.bundleVersion = "0.21.12";
-            PlayerSettings.Android.bundleVersionCode = 40;
+            PlayerSettings.bundleVersion = "0.21.13";
+            PlayerSettings.Android.bundleVersionCode = 41;
             PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.Android, "com.sctale.spacefighter");
             PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
             PlayerSettings.allowedAutorotateToPortrait = true;
