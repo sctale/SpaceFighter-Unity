@@ -414,7 +414,7 @@ namespace AuroraRift
             }
 
             Txt(_tiny, Center(w, RefH - bottom - 34f, 900f, 24f),
-                Sp("v0.21.11") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc, TextAnchor.MiddleCenter);
+                Sp("v0.21.12") + "   ·   精准模式 / 擦弹经济 / 过关奖励 / 蓄能换线", Dimc, TextAnchor.MiddleCenter);
         }
 
         /// <summary>菱形环：外菱形 + 挖空内菱形（GUI.matrix 旋转在缩放坐标系下不可靠，改用嵌套）。</summary>
@@ -482,24 +482,33 @@ namespace AuroraRift
             GUI.color = prev;
 
             // ---- 左上：分数块 ----
-            // 行距按网页版的"墨迹间距"折算（不是排版框间距）：IMGUI 会把字体 Leading 留在框顶，
+            // 结构固定为「SCORE → 大数字 → 分隔线 → BEST / GRAZE 双列」：
+            // 标签在上、数值在下，两列共用同一条基线，避免旧版把 label/value 挤成一行。
             // 50 号数字的墨迹底落在 ScoreTop+55.2，BEST 行墨迹顶在 BestTop+7.6，
-            // 两者之间要留出 CSS(line-height:1 的 24.8 + gap 2) 折出来的 10.4。
-            // 底板包住四行到 172，Boss 卡从 180.8 起，中间留 8.8 的缝。
-            UiKit.SlabGrad(R(pad - 10f, topPad + 24f, 306f, 148f),
+            // 两者之间留 CSS 折算的 10.4，分隔线放在这段空隙里。
+            UiKit.SlabGrad(R(pad - 10f, topPad + 24f, 320f, 152f),
                 new Color(0.065f, 0.105f, 0.185f, 0.72f), new Color(0.006f, 0.010f, 0.028f, 0.72f),
                 Line(0.18f), 18f);
-            UiKit.Line(R(pad - 10f, topPad + 24f, 306f, 1f), new Color(Teal.r, Teal.g, Teal.b, 0.35f));
-            UiKit.Line(R(pad - 10f, topPad + 42f, 2f, 100f), new Color(Teal.r, Teal.g, Teal.b, 0.65f));
-            Txt(Label(17, TealDim, TextAnchor.UpperLeft), R(pad, topPad + 36.8f, 420f, 22f), Sp("SCORE"), TealDim);
-            Bold(_numBig, R(pad, topPad + ScoreTop, 460f, ScoreBoxH),
+            UiKit.Line(R(pad - 10f, topPad + 24f, 320f, 1f), new Color(Teal.r, Teal.g, Teal.b, 0.35f));
+            UiKit.Line(R(pad - 10f, topPad + 42f, 2f, 122f), new Color(Teal.r, Teal.g, Teal.b, 0.65f));
+            UiKit.Sprite(Cx(pad + 3f, topPad + 46.8f, 6f, 6f), UiKit.Diamond,
+                new Color(Teal.r, Teal.g, Teal.b, 0.65f));
+            Txt(Label(15, TealDim, TextAnchor.UpperLeft), R(pad + 16f, topPad + 36.8f, 280f, 22f), Sp("SCORE"), TealDim);
+            Bold(_numBig, R(pad, topPad + ScoreTop, 292f, ScoreBoxH),
                 Mathf.RoundToInt(root.Score).ToString("N0"), Paper, 2f);
+
+            UiKit.Line(R(pad, topPad + 119f, 292f, 1f), Line(0.10f));
             float bestY = topPad + BestTop;
             float grazeY = topPad + GrazeTop;
-            Txt(_tiny, R(pad, bestY, 300f, 20f), "BEST ", Dimc);
-            Txt(_small, R(pad + 58f, bestY - 1f, 300f, 22f), root.Best.ToString("N0"), new Color(Gold.r, Gold.g, Gold.b, 0.85f));
-            Txt(_tiny, R(pad, grazeY, 300f, 18f), "GRAZE ", Dimc);
-            Txt(_small, R(pad + 72f, grazeY - 2f, 300f, 20f), root.Stats.Graze.ToString(), Teal);
+            Txt(Label(14, Gold, TextAnchor.UpperLeft), R(pad, bestY, 136f, 18f), Sp("BEST"),
+                new Color(Gold.r, Gold.g, Gold.b, 0.62f));
+            Txt(Label(14, Teal, TextAnchor.UpperRight), R(pad + 164f, bestY, 136f, 18f), Sp("GRAZE"),
+                new Color(Teal.r, Teal.g, Teal.b, 0.62f));
+            UiKit.Line(R(pad + 152f, bestY + 2f, 1f, 24f), Line(0.12f));
+            Bold(Label(19, Gold, TextAnchor.UpperLeft), R(pad, grazeY - 4f, 140f, 24f),
+                root.Best.ToString("N0"), new Color(Gold.r, Gold.g, Gold.b, 0.92f), 1.2f);
+            Bold(Label(19, Teal, TextAnchor.UpperRight), R(pad + 164f, grazeY - 4f, 136f, 24f),
+                root.Stats.Graze.ToString(), Teal, 1.2f);
 
             // ---- 中上：星区（eyebrow 19.4 / 数字 31.4 / 区名 50.4）----
             if (dir != null)
